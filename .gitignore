@@ -93,3 +93,6 @@ package-lock.json
 
 snapshots
 !unittests/snapshots
+
+teloszero-core-*.tar.zst
+teloszero-core_*.deb

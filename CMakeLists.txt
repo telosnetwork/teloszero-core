@@ -1,6 +1,6 @@
 cmake_minimum_required( VERSION 3.16 )
 
-project( antelope-spring )
+project( teloszero-core )
 include(CTest)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
@@ -66,7 +66,7 @@ if(ENABLE_OC AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND NOT WIN32)
       # can be created with the exact version found
       find_package(LLVM REQUIRED CONFIG)
       if(LLVM_VERSION_MAJOR VERSION_LESS 7 OR LLVM_VERSION_MAJOR VERSION_GREATER_EQUAL 12)
-	      message(FATAL_ERROR "Spring requires an LLVM version 7 through 11")
+	      message(FATAL_ERROR "TelosZero requires an LLVM version 7 through 11")
       endif()
    endif()
 endif()
@@ -94,12 +94,12 @@ endif()
 
 if( APPLE AND UNIX )
 # Apple Specific Options Here
-    message( STATUS "Configuring Spring on macOS" )
+    message( STATUS "Configuring TelosZero on macOS" )
     set( CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -Wall -Wno-deprecated-declarations" )
     set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-deprecated-declarations" )
 else()
     # Linux Specific Options Here
-    message( STATUS "Configuring Spring on Linux" )
+    message( STATUS "Configuring TelosZero on Linux" )
     set( CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -Wall" )
     set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall" )
     if ( FULL_STATIC_BUILD )
@@ -129,13 +129,13 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_
   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wthread-safety" )
 endif()
 
-option(EOSIO_ENABLE_DEVELOPER_OPTIONS "enable developer options for Spring" OFF)
+option(EOSIO_ENABLE_DEVELOPER_OPTIONS "enable developer options for TelosZero" OFF)
 
 # based on http://www.delorie.com/gnu/docs/gdb/gdb_70.html
 # uncomment this line to tell GDB about macros (slows compile times)
 # set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -gdwarf-2 -g3" )
 
-set(ENABLE_COVERAGE_TESTING FALSE CACHE BOOL "Build Spring for code coverage analysis")
+set(ENABLE_COVERAGE_TESTING FALSE CACHE BOOL "Build TelosZero for code coverage analysis")
 
 if(ENABLE_COVERAGE_TESTING)
   SET(CMAKE_C_FLAGS   "--coverage ${CMAKE_C_FLAGS}")
@@ -168,7 +168,7 @@ message( STATUS "Using '${EOSIO_ROOT_KEY}' as public key for 'eosio' account" )
 option(ENABLE_TCMALLOC "use tcmalloc (requires gperftools)" OFF)
 if( ENABLE_TCMALLOC )
     find_package( Gperftools REQUIRED )
-    message( STATUS "Compiling Spring with TCMalloc")
+    message( STATUS "Compiling TelosZero with TCMalloc")
     #if doing this by the book, simply link_libraries( ${GPERFTOOLS_TCMALLOC} ) here. That will
     #give the performance benefits of tcmalloc but since it won't be linked last
     #the heap profiler & checker may not be accurate. This here is rather undocumented behavior
@@ -177,7 +177,7 @@ if( ENABLE_TCMALLOC )
     set(CMAKE_CXX_STANDARD_LIBRARIES "${CMAKE_CXX_STANDARD_LIBRARIES} ${GPERFTOOLS_TCMALLOC}")
 endif()
 
-# spring includes a bundled BoringSSL which conflicts with OpenSSL. Make sure any other bundled libraries (such as boost)
+# TelosZero includes a bundled BoringSSL which conflicts with OpenSSL. Make sure any other bundled libraries (such as boost)
 # do not attempt to use an external OpenSSL in any manner
 set(CMAKE_DISABLE_FIND_PACKAGE_OpenSSL On)
 
@@ -212,7 +212,7 @@ configure_file(${CMAKE_SOURCE_DIR}/CMakeModules/EosioCheckVersion.cmake ${CMAKE_
 configure_file(${CMAKE_SOURCE_DIR}/CMakeModules/leap-config.cmake.in ${CMAKE_BINARY_DIR}/lib/cmake/leap/leap-config.cmake @ONLY)
 configure_file(${CMAKE_SOURCE_DIR}/CMakeModules/EosioTesterBuild.cmake.in ${CMAKE_BINARY_DIR}/lib/cmake/leap/EosioTester.cmake @ONLY)
 configure_file(${CMAKE_SOURCE_DIR}/CMakeModules/EosioCheckVersion.cmake ${CMAKE_BINARY_DIR}/lib/cmake/leap/EosioCheckVersion.cmake COPYONLY)
-# spring CMake files
+# spring-compatible CMake files
 configure_file(${CMAKE_SOURCE_DIR}/CMakeModules/spring-config.cmake.in ${CMAKE_BINARY_DIR}/lib/cmake/spring/spring-config.cmake @ONLY)
 configure_file(${CMAKE_SOURCE_DIR}/CMakeModules/EosioTesterBuild.cmake.in ${CMAKE_BINARY_DIR}/lib/cmake/spring/EosioTester.cmake @ONLY)
 configure_file(${CMAKE_SOURCE_DIR}/CMakeModules/EosioCheckVersion.cmake ${CMAKE_BINARY_DIR}/lib/cmake/spring/EosioCheckVersion.cmake COPYONLY)
@@ -229,7 +229,7 @@ configure_file(${CMAKE_SOURCE_DIR}/CMakeModules/leap-config.cmake.in ${CMAKE_BIN
 install(FILES ${CMAKE_BINARY_DIR}/modules/leap-config.cmake DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/leap COMPONENT dev EXCLUDE_FROM_ALL)
 install(FILES ${CMAKE_BINARY_DIR}/modules/EosioTester.cmake DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/leap COMPONENT dev EXCLUDE_FROM_ALL)
 install(FILES ${CMAKE_SOURCE_DIR}/CMakeModules/EosioCheckVersion.cmake DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/leap COMPONENT dev EXCLUDE_FROM_ALL)
-# spring CMake files
+# spring-compatible CMake files
 configure_file(${CMAKE_SOURCE_DIR}/CMakeModules/spring-config.cmake.in ${CMAKE_BINARY_DIR}/modules/spring-config.cmake @ONLY)
 install(FILES ${CMAKE_BINARY_DIR}/modules/spring-config.cmake DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/spring COMPONENT dev EXCLUDE_FROM_ALL)
 install(FILES ${CMAKE_BINARY_DIR}/modules/EosioTester.cmake DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/spring COMPONENT dev EXCLUDE_FROM_ALL)
@@ -313,7 +313,8 @@ add_custom_target(dev-install
 
 include(doxygen)
 
-option(ENABLE_SPRING_DEV_DEB "Enable building the spring-dev .deb package" OFF)
+option(ENABLE_TELOSZERO_DEV_DEB "Enable building the teloszero-core-dev .deb package" OFF)
+option(ENABLE_SPRING_DEV_DEB "Compatibility alias for ENABLE_TELOSZERO_DEV_DEB" OFF)
 
 include(package.cmake)
 include(CPack)
