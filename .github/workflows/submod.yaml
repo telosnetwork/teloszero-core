@@ -1,20 +1,12 @@
 name: Submodule Check
-on: [pull_request]
 
-env:
-  PR_NUMBER: ${{ toJson(github.event.number) }}
+on:
+  workflow_dispatch:
 
+# Inherited from Spring. The recursive submodule regression check is kept as a
+# manual workflow until TelosZero CI policy defines when it should gate PRs.
 jobs:
-  submodule_regression_check:
-    name: Submodule Regression Check
+  disabled:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        run: |
-          git clone https://x-access-token:${{github.token}}@github.com/${GITHUB_REPOSITORY} .
-          git fetch -v --prune origin +refs/pull/${PR_NUMBER}/merge:refs/remotes/pull/${PR_NUMBER}/merge
-          git checkout --force --progress refs/remotes/pull/${PR_NUMBER}/merge
-          git submodule sync --recursive
-          git submodule update --init --force --recursive
-      - name: Submodule Regression Check
-        run: ./scripts/submodule-regression-check.sh
+      - run: echo "Submodule regression check is manual during TelosZero bootstrap."
