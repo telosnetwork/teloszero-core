@@ -1,0 +1,46 @@
+name: Bootstrap Checks
+
+on:
+  push:
+    branches:
+      - main
+      - "bootstrap/**"
+      - "release/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: Static checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Check shell scripts
+        run: |
+          bash -n tools/tweak-deb.sh
+          sh -n scripts/postinst
+          sh -n scripts/prerm
+
+      - name: Check Perl scripts
+        run: |
+          perl -c tools/pinned.pl
+
+      - name: Check Python syntax
+        run: |
+          python3 -m py_compile \
+            tests/TestHarness/Node.py \
+            tests/TestHarness/queries.py \
+            tests/TestHarness/testUtils.py \
+            tests/cli_test.py
+
+      - name: Check package naming
+        run: |
+          grep -Fq 'project( teloszero-core )' CMakeLists.txt
+          grep -Fq 'CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/TelosNetwork/teloszero-core"' package.cmake
+          grep -Fq 'teloszero-core_*.deb' tools/reproducible.Dockerfile

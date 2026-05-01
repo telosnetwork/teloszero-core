@@ -1,11 +1,9 @@
 name: "Build & Test"
 
+# This workflow is inherited from Spring and still requires Telos-owned
+# self-hosted runners plus a platform cache workflow. Keep it manual until
+# those resources are configured for TelosZero.
 on:
-  push:
-    branches:
-      - main
-      - "release/*"
-  pull_request:
   workflow_dispatch:
     inputs:
       override-cdt:
@@ -101,12 +99,12 @@ jobs:
           zstdcat build.tar.zst | tar x
           cd build
           cpack
-          ../tools/tweak-deb.sh antelope-spring_*.deb
+          ../tools/tweak-deb.sh teloszero-core_*.deb
       - name: Install dev package
         if: matrix.platform != 'reproducible'
         run: |
           apt-get update && apt-get upgrade -y
-          apt-get install -y ./build/antelope-spring_*.deb ./build/antelope-spring-dev*.deb
+          apt-get install -y ./build/teloszero-core_*.deb ./build/teloszero-core-dev*.deb
       - name: Test using TestHarness
         if: matrix.platform != 'reproducible'
         run: |
@@ -115,15 +113,15 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.platform != 'reproducible'
         with:
-          name: antelope-spring-dev-${{matrix.platform}}-amd64
-          path: build/antelope-spring-dev*.deb
+          name: teloszero-core-dev-${{matrix.platform}}-amd64
+          path: build/teloszero-core-dev*.deb
           compression-level: 0
-      - name: Upload spring package
+      - name: Upload TelosZero package
         uses: actions/upload-artifact@v4
         if: matrix.platform == 'reproducible'
         with:
-          name: antelope-spring-deb-amd64
-          path: build/antelope-spring_*.deb
+          name: teloszero-core-deb-amd64
+          path: build/teloszero-core_*.deb
           compression-level: 0
 
   tests:
@@ -302,12 +300,12 @@ jobs:
         run: |
           rm -r *
       - if: ${{ matrix.test == 'deb-install' }}
-        name: Download antelope-spring-dev
+        name: Download teloszero-core-dev
         uses: actions/download-artifact@v4
         with:
-          name: antelope-spring-dev-${{matrix.platform}}-amd64
+          name: teloszero-core-dev-${{matrix.platform}}-amd64
       - if: ${{ matrix.test == 'deb-install' }}
-        name: Install antelope-spring-dev Package
+        name: Install teloszero-core-dev Package
         run: |
           apt-get install -y ./*.deb
           rm ./*.deb
