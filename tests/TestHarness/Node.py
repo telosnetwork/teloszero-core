@@ -298,7 +298,13 @@ class Node(Transactions):
         try:
             if self.popenProc is not None:
                 self.popenProc.send_signal(killSignal)
-                self.popenProc.wait()
+                try:
+                    self.popenProc.wait(timeout=60)
+                except subprocess.TimeoutExpired:
+                    Utils.Print("WARNING: Node %s did not exit after signal %s; sending SIGKILL." % (self.nodeId, killSignal))
+                    self.popenProc.kill()
+                    self.popenProc.wait(timeout=30)
+                    return False
             elif self.pid is not None:
                 os.kill(self.pid, killSignal)
 
