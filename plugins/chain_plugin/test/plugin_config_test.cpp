@@ -20,6 +20,7 @@ BOOST_AUTO_TEST_CASE(chain_plugin_default_tests) {
    BOOST_REQUIRE(config);
    BOOST_CHECK_EQUAL(config->max_retained_files, UINT32_MAX);
 
+#ifdef EOSIO_EOS_VM_OC_RUNTIME_ENABLED
    // test default eos-vm-oc-whitelist
    BOOST_CHECK(plugin.chain().is_eos_vm_oc_whitelisted(eosio::chain::name{"xsat"}));
    BOOST_CHECK(plugin.chain().is_eos_vm_oc_whitelisted(eosio::chain::name{"vaulta"}));
@@ -30,8 +31,10 @@ BOOST_AUTO_TEST_CASE(chain_plugin_default_tests) {
    BOOST_CHECK(!plugin.chain().is_eos_vm_oc_whitelisted(eosio::chain::name{"vault"}));
    BOOST_CHECK(!plugin.chain().is_eos_vm_oc_whitelisted(eosio::chain::name{"xs"}));
    BOOST_CHECK(!plugin.chain().is_eos_vm_oc_whitelisted(eosio::chain::name{""}));
+#endif
 }
 
+#ifdef EOSIO_EOS_VM_OC_RUNTIME_ENABLED
 BOOST_AUTO_TEST_CASE(chain_plugin_eos_vm_oc_whitelist) {
    fc::temp_directory  tmp;
    appbase::scoped_app app;
@@ -48,3 +51,4 @@ BOOST_AUTO_TEST_CASE(chain_plugin_eos_vm_oc_whitelist) {
    BOOST_CHECK(!plugin.chain().is_eos_vm_oc_whitelisted(eosio::chain::name{"xsat"}));
    BOOST_CHECK(!plugin.chain().is_eos_vm_oc_whitelisted(eosio::chain::name{"vaulta"}));
 }
+#endif
