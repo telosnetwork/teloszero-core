@@ -1,14 +1,16 @@
 # Patch Provenance
 
-This file records bootstrap patches imported after the initial
-`AntelopeIO/spring` `main` mirror.
+This file records patches imported after the upstream `AntelopeIO/spring`
+base used by the current TelosZero branch.
 
-## Bootstrap Cherry-Picks
+## Stable 1.2 Cherry-Picks
 
 The following commits were cherry-picked from upstream Spring branches or the
-Spring Community Edition history because they were already proposed upstream and
-address reproducibility, test stability, or runtime stability:
+Spring Community Edition history because they were already proposed upstream,
+apply cleanly to the Spring 1.2 code line, and address reproducibility, build
+compatibility, test stability, or runtime stability:
 
+- `af58b3b160fb37701497b876a211bb9ff6b2115b` - explicitly initialize the atomic `timer_state_t`
 - `4c510d62d7c94df108c640b8a952d833a8d86d6c` - validate hash of pinned package repo
 - `4f325af99cb87ddaad28040ec78f39f58e8672f8` - validate LLVM and CMake tarball hashes
 - `4a927beeb8eb04d9d8ca196a8f8ed1f5852fd677` - calculate block in round correctly
@@ -21,3 +23,6 @@ address reproducibility, test stability, or runtime stability:
 - `96bcb7544e3ac92fb7696cfed9c9052a4ed02af3` - do not OC interrupt during replay
 
 Community Edition release commits and package rename commits were not imported.
+Larger behavior changes, including the strong-QC producer fix, should be
+reviewed in their own TelosZero pull requests before landing on a stable
+release branch.
