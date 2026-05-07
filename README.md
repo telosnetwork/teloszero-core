@@ -1,7 +1,15 @@
 # TelosZero Core
 
-TelosZero Core is the TelosNetwork-maintained continuation of Antelope Spring for
-Telos operators, infrastructure providers, and protocol contributors.
+**The Telos protocol stack has a home again.**
+
+TelosZero Core is the TelosNetwork-maintained continuation of Antelope Spring:
+a focused, Telos-owned chain software line for operators, infrastructure
+providers, exchanges, tooling teams, and protocol contributors who need a
+serious production path forward.
+
+This is not a casual rename. TelosZero keeps the battle-tested Spring runtime
+surface, preserves the history that matters, and moves release authority,
+packaging, provenance, and long-term maintenance into Telos hands.
 
 This stable branch is based on upstream Spring `v1.2.2`, with the upstream
 MIT license update and a documented set of TelosZero release backports applied.
@@ -14,16 +22,33 @@ packages install overlapping node and CLI binaries.
 
 ## Current Status
 
-This repository is in private bootstrap. Do not use it for production until the
-TelosZero maintainers publish a signed release and an operator upgrade notice.
+TelosZero is in private release-candidate bootstrap. The goal of this branch is
+simple and important: establish a conservative, release-ready 1.2 line that
+Telos operators can trust before larger protocol work continues on later
+branches.
 
-Initial bootstrap priorities:
+Do not use it for production until the TelosZero maintainers publish a signed
+release and an operator upgrade notice.
 
-- preserve Spring history and compatibility
-- publish Telos-controlled packages and release artifacts
-- keep legal and licensing provenance clear
-- replace inherited infrastructure with Telos-owned CI and release workflows
-- review useful patches from upstream Spring and the Spring Community Edition
+What is already in place:
+
+- a clean Spring `v1.2.2` base for the first TelosZero production line
+- Telos-controlled package identity: `teloszero-core` and `teloszero-core-dev`
+- curated backports for release safety, build integrity, and operator hygiene
+- documented licensing and patch provenance
+- preserved upstream history for auditability
+- a path to Telos-owned CI, release signing, package publishing, and support
+
+What comes next:
+
+- cut signed release artifacts from this stable branch
+- publish clear operator upgrade guidance
+- finish Linux package validation and reproducible build checks
+- continue reviewing useful Spring and Spring Community Edition patches
+- reserve future `release/2.x-teloszero` work for larger protocol evolution
+
+TelosZero exists to make Telos infrastructure boring in the best possible way:
+owned, reviewable, reproducible, and maintained.
 
 ## Repository Remotes
 
