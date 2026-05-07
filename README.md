@@ -3,9 +3,10 @@
 TelosZero Core is the TelosNetwork-maintained continuation of Antelope Spring for
 Telos operators, infrastructure providers, and protocol contributors.
 
-This private staging repository currently tracks the MIT-licensed
-`AntelopeIO/spring` `main` line and keeps the runtime command names stable:
-`nodeos`, `cleos`, `keosd`, and `spring-util`.
+This stable branch is based on upstream Spring `v1.2.2`, with the upstream
+MIT license update and a documented set of TelosZero release backports applied.
+The runtime command names remain stable: `nodeos`, `cleos`, `keosd`, and
+`spring-util`.
 
 TelosZero packages are emitted as `teloszero-core` and `teloszero-core-dev`.
 They conflict with the historical Spring/Leap/EOSIO packages because those
@@ -45,19 +46,20 @@ changes. `ce` is fetch-only for reviewing Community Edition patches.
 
 `main` is the development branch and should not be used for production.
 
-Planned stable branches:
+Stable branches:
 
-- `release/teloszero-1.x` for the first Telos-compatible production line
-- `release/teloszero-2.x` for future protocol work and developer previews
+- `release/1.2-teloszero` for the first Telos-compatible production line
+- future `release/2.x-teloszero` branches for later protocol work
 
 Historical upstream branches and tags are preserved for auditability.
 
 ## Licensing
 
-The bootstrap starts from upstream Spring `main` after the MIT license update.
-Older Spring release branches and tags may carry different license terms. Do not
-cut TelosZero production binaries from those branches until the licensing status
-is reviewed and documented.
+This branch starts from upstream Spring `v1.2.2` and applies the upstream
+`main` license update commit that changed Spring to MIT terms. Older Spring
+release branches and tags may carry different license terms. TelosZero
+production binaries should be cut only from branches whose base and license
+provenance are documented.
 
 The upstream copyright and license notice is preserved in `LICENSE`.
 
