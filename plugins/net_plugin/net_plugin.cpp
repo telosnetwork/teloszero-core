@@ -2126,7 +2126,7 @@ namespace eosio {
                  ("sp", sync_fetch_span)("s", cc.fork_db_size()));
 
          // make sure controller is processing blocks, might have been interrupted and need a kick
-         fc_dlog(p2p_blk_log, "sync post process_incoming_block to app thread, block ${n}", ("n", blk_num));
+         fc_dlog(logger, "sync post process_incoming_block to app thread, block ${n}", ("n", blk_num));
          my_impl->producer_plug->process_blocks();
       }
 
