@@ -1,15 +1,12 @@
 # TelosZero Core
 
-**The Telos protocol stack has a home again.**
+TelosZero Core is the TelosNetwork-maintained continuation of Antelope Spring.
+It provides node software and supporting tools for Telos operators,
+infrastructure providers, exchanges, tooling teams, and protocol contributors.
 
-TelosZero Core is the TelosNetwork-maintained continuation of Antelope Spring:
-a focused, Telos-owned chain software line for operators, infrastructure
-providers, exchanges, tooling teams, and protocol contributors who need a
-serious production path forward.
-
-This is not a casual rename. TelosZero keeps the battle-tested Spring runtime
-surface, preserves the history that matters, and moves release authority,
-packaging, provenance, and long-term maintenance into Telos hands.
+TelosZero preserves Spring runtime compatibility while moving release
+authority, packaging, provenance, and long-term maintenance under TelosNetwork
+stewardship.
 
 The runtime command names remain stable: `nodeos`, `cleos`, `keosd`, and
 `spring-util`.
@@ -28,8 +25,8 @@ branches. The first public TelosZero release line is:
 The initial public release is
 [`teloszero-v1.2.2`](https://github.com/telosnetwork/teloszero-core/releases/tag/teloszero-v1.2.2).
 
-TelosZero exists to make Telos infrastructure boring in the best possible way:
-owned, reviewable, reproducible, and maintained.
+The branch and release structure is intended to keep production releases
+reviewable, reproducible, and maintained.
 
 ## Binary Installation
 
