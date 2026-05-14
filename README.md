@@ -25,6 +25,11 @@ branches. The first public TelosZero release line is:
 The initial public release is
 [`teloszero-v1.2.2`](https://github.com/telosnetwork/teloszero-core/releases/tag/teloszero-v1.2.2).
 
+Future development on `main` is where Telos-specific protocol work will be
+reviewed, including roadmap work toward quantum-safe Telos infrastructure.
+Protocol-level changes must land through explicit design review and release
+planning before operator use.
+
 The branch and release structure is intended to keep production releases
 reviewable, reproducible, and maintained.
 
