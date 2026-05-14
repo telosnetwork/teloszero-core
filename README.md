@@ -1,15 +1,50 @@
 # TelosZero Core
 
-TelosZero Core is the TelosNetwork-maintained continuation of Antelope Spring.
+```text
+ _______    _            ______
+|__   __|  | |          |___  /
+   | | ___ | | ___  ___    / / ___ _ __ ___
+   | |/ _ \| |/ _ \/ __|  / / / _ \ '__/ _ \
+   | |  __/| | (_) \__ \ / /_|  __/ | | (_) |
+   |_|\___||_|\___/|___//_____\___|_|  \___/
+                         CORE
+```
+
+TelosZero Core is the Telos Foundation-maintained continuation of Antelope Spring.
 It provides node software and supporting tools for Telos operators,
 infrastructure providers, exchanges, tooling teams, and protocol contributors.
 
 TelosZero preserves Spring runtime compatibility while moving release
-authority, packaging, provenance, and long-term maintenance under TelosNetwork
+authority, packaging, provenance, and long-term maintenance under Telos
 stewardship.
 
 The runtime command names remain stable: `nodeos`, `cleos`, `keosd`, and
 `spring-util`.
+
+## Features And Benefits
+
+TelosZero Core carries forward the operational strengths of the Antelope/Spring
+software line while giving Telos a dedicated maintenance and release path.
+
+- **Antelope-compatible runtime:** preserves the familiar `nodeos`, `cleos`,
+  `keosd`, and `spring-util` command surface for operators and tooling teams.
+- **Savanna consensus support:** inherits Spring's Savanna consensus work for
+  modern Antelope-based network operation.
+- **High-performance smart contract execution:** includes the EOS VM runtime
+  stack used by Antelope chains for WebAssembly contract execution.
+- **Operator and exchange APIs:** includes chain, net, producer, state history,
+  trace, and HTTP plugin surfaces used by infrastructure providers, exchanges,
+  and indexers.
+- **Telos-ready genesis materials:** includes public Telos mainnet and testnet
+  genesis references for node setup and verification.
+- **Conservative release provenance:** starts from known Spring release bases,
+  documents selected upstream fixes, and keeps production releases separate
+  from forward-development work.
+- **Telos stewardship:** moves release ownership, packaging, validation, and
+  long-term maintenance into the Telos ecosystem.
+- **Future protocol roadmap:** keeps Telos-specific protocol development on
+  `main`, including design-reviewed work toward quantum-safe Telos
+  infrastructure.
 
 ## Status And Branches
 
