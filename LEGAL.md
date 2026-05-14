@@ -1,6 +1,6 @@
 # Legal And Licensing Notes
 
-This repository is the TelosNetwork-maintained continuation of
+This repository is the Telos Foundation-maintained continuation of
 `AntelopeIO/spring`.
 
 ## License Provenance
@@ -13,6 +13,8 @@ e6a99f68b67abc4d89fe716755b2e1394a4991f7
 ```
 
 Existing upstream copyright notices are preserved.
+The `LICENSE` file also includes a TelosZero Core notice for Telos Foundation
+maintenance and downstream contributions.
 
 ## Stable 1.2 Release Line
 
