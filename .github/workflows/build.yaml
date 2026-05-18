@@ -1,11 +1,9 @@
 name: "Build & Test"
 
+# This workflow is inherited from Spring and still requires Telos-owned
+# self-hosted runners plus a platform cache workflow. Keep it manual until
+# those resources are configured for TelosZero.
 on:
-  push:
-    branches:
-      - main
-      - "release/*"
-  pull_request:
   workflow_dispatch:
     inputs:
       override-cdt:
