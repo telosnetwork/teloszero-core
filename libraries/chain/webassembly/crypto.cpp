@@ -285,7 +285,10 @@ namespace eosio::chain::webassembly {
    }
 
    int32_t interface::bls_g1_weighted_sum(span<const char> points, span<const char> scalars, const uint32_t n, span<char> result) const {
-      if(n == 0 || points.size() != n*96 ||  scalars.size() != n*32 ||  result.size() != 96)
+      // Compute the expected span lengths in 64-bit. `n` is uint32 and the products were previously
+      // computed in 32-bit, which can overflow for large `n` and let malformed inputs pass this
+      // length check before allocation. 64-bit math keeps the comparison exact.
+      if(n == 0 || points.size() != static_cast<uint64_t>(n)*96u || scalars.size() != static_cast<uint64_t>(n)*32u || result.size() != 96)
          return return_code::failure;
 
       // Use much efficient scale for the special case of n == 1.
@@ -320,7 +323,8 @@ namespace eosio::chain::webassembly {
    }
 
    int32_t interface::bls_g2_weighted_sum(span<const char> points, span<const char> scalars, const uint32_t n, span<char> result) const {
-      if(n == 0 || points.size() != n*192 ||  scalars.size() != n*32 ||  result.size() != 192)
+      // 64-bit length math to avoid the 32-bit n*192 / n*32 wraparound (see bls_g1_weighted_sum).
+      if(n == 0 || points.size() != static_cast<uint64_t>(n)*192u || scalars.size() != static_cast<uint64_t>(n)*32u || result.size() != 192)
          return return_code::failure;
 
       // Use much efficient scale for the special case of n == 1.
@@ -355,7 +359,8 @@ namespace eosio::chain::webassembly {
    }
 
    int32_t interface::bls_pairing(span<const char> g1_points, span<const char> g2_points, const uint32_t n, span<char> result) const {
-      if(n == 0 || g1_points.size() != n*96 ||  g2_points.size() != n*192 ||  result.size() != 576)
+      // 64-bit length math to avoid the 32-bit n*96 / n*192 wraparound (see bls_g1_weighted_sum).
+      if(n == 0 || g1_points.size() != static_cast<uint64_t>(n)*96u || g2_points.size() != static_cast<uint64_t>(n)*192u || result.size() != 576)
          return return_code::failure;
       std::vector<std::tuple<bls12_381::g1, bls12_381::g2>> v;
       v.reserve(n);
