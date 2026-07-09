@@ -36,16 +36,23 @@ existing data directory and configuration.
 
 ### 1. (Recommended) Take a snapshot
 
-A snapshot gives you a fast recovery point. While `nodeos` is running:
+A snapshot gives you a fast recovery point. Taking one requires the
+`producer_api_plugin`. If it is not already enabled, add it (for example
+`plugin = eosio::producer_api_plugin` in `config.ini`, or
+`--plugin eosio::producer_api_plugin` on the command line); you can remove it
+again after the snapshot if you weren't using it.
+
+While `nodeos` is running:
 
 ```bash
 curl -X POST http://127.0.0.1:8888/v1/producer/create_snapshot
 ```
 
-The response includes the snapshot file path. (This requires the
-`producer_api_plugin` to be enabled. If you don't have it, a clean shutdown in
-step 2 is sufficient for the swap; you can also fall back to your normal backup
-process.)
+Wait for the JSON response — it contains the path of the newly created
+snapshot file. If you don't take a snapshot, the clean shutdown in step 2 is
+enough for the in-place swap; a snapshot just gives you an extra recovery
+option. Snapshots are format-compatible between Spring 1.2.x and TelosZero
+1.2.2, so a snapshot taken on either can be used to restart on the other.
 
 ### 2. Stop `nodeos` cleanly
 
@@ -106,6 +113,16 @@ Start with your **existing** data directory and config — no extra flags, no
 ```bash
 sudo systemctl start nodeos
 ```
+
+If you prefer a clean restart instead of continuing from existing state, you
+can start once from the snapshot taken in step 1 against a fresh data
+directory:
+
+```bash
+nodeos --snapshot /path/to/snapshot.bin [your other options]
+```
+
+Drop the `--snapshot` flag on subsequent restarts.
 
 ### 7. Confirm it is syncing
 
