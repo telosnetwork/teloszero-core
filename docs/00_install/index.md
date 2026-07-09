@@ -6,10 +6,10 @@ The best way to install and use the Antelope software is to build it from source
 
 * [Build Antelope from Source](01_build-from-source/index.md)
 
-Already running an Antelope Spring non-producing node (for example an exchange
+Already running an Antelope Leap non-producing node (for example an exchange
 or API node)? See:
 
-* [Upgrade a Non-Producing Node from Antelope Spring](02_upgrade-non-bp-node-from-spring.md)
+* [Upgrade a Non-Producing Node from Antelope Leap](02_upgrade-non-bp-node-from-leap.md)
 
 ## Supported Operating Systems
 
