@@ -32,9 +32,14 @@ sudo install -d -m 0700 -o "$USER" -g "$(id -gn)" /var/lib/telos-quantum-lab
 # Prepare requires a path that does not already exist:
 python3 scripts/quantum-lab/bootstrap.py prepare \
   /var/lib/telos-quantum-lab/private-chain \
+  --package /path/to/teloszero-core_1.2.2_amd64.deb \
   --public-key 'PUB_K1_LAB_ONLY_PUBLIC_KEY' \
   --timestamp "$(date -u +'%Y-%m-%dT%H:%M:00.000')"
 ```
+
+Preparation hashes the supplied package and stops if it differs from the pinned
+release checksum. The manifest records the verified hash, calculated chain ID,
+and genesis-file hash.
 
 The created `config/config.ini` binds API and P2P to loopback at ports
 8890 and 9890. Add exactly one lab-only
