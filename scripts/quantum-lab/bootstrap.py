@@ -11,6 +11,8 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
+import stat
 import struct
 import time
 import urllib.request
@@ -207,6 +209,69 @@ def read_manifest(root):
     return manifest
 
 
+def validate_private_config(root):
+    config = root / "config" / "config.ini"
+    if not config.is_file() or config.is_symlink():
+        fail("private nodeos config is missing or is a symlink")
+    if stat.S_IMODE(config.stat().st_mode) & 0o077:
+        fail("private nodeos config must not be readable by group or others")
+    settings = {}
+    for raw in config.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            fail("invalid private nodeos config line")
+        name, value = (part.strip() for part in line.split("=", 1))
+        settings.setdefault(name, []).append(value)
+    expected = {
+        "http-server-address": ["127.0.0.1:8890"],
+        "p2p-listen-endpoint": ["127.0.0.1:9890"],
+        "plugin": ["eosio::http_plugin", "eosio::chain_plugin",
+                   "eosio::chain_api_plugin", "eosio::net_plugin",
+                   "eosio::producer_plugin"],
+        "producer-name": ["eosio"],
+        "enable-stale-production": ["true"],
+        "chain-state-db-size-mb": ["1024"],
+    }
+    if set(settings) != set(expected) | {"signature-provider"}:
+        fail("private config contains missing or unapproved options")
+    for name, values in expected.items():
+        if settings.get(name) != values:
+            fail(f"private config option {name} differs from prepared isolation")
+    signer = settings["signature-provider"]
+    if len(signer) != 1 or "=KEY:" not in signer[0]:
+        fail("exactly one KEY signature provider is required")
+    public, private = signer[0].split("=KEY:", 1)
+    if not private or "<" in private or ">" in private:
+        fail("a real lab-only signing key is required")
+    genesis = json.loads((root / "genesis.json").read_text(encoding="utf-8"))
+    if decode_k1_public_key(public) != decode_k1_public_key(genesis["initial_key"]):
+        fail("signer public key does not match genesis key")
+
+
+def start(args):
+    root = root_path(args.directory)
+    manifest = read_manifest(root)
+    validate_private_config(root)
+    nodeos = shutil.which(args.nodeos)
+    if not nodeos:
+        fail("nodeos binary not found")
+    data = root / "data"
+    if not data.is_dir() or data.is_symlink():
+        fail("dedicated chain data directory is missing or is a symlink")
+    populated = any(data.iterdir())
+    if populated and not manifest["observed_chain_id"]:
+        fail("unverified chain data exists; inspect it before a restart")
+    if not populated and manifest["observed_chain_id"]:
+        fail("pinned chain data is missing; refuse silent reset")
+    command = [nodeos, "--config-dir", str(root / "config"),
+               "--data-dir", str(data)]
+    if not populated:
+        command += ["--genesis-json", str(root / "genesis.json")]
+    os.execv(nodeos, command)
+
+
 def get_info():
     request = urllib.request.Request(
         "http://127.0.0.1:8890/v1/chain/get_info",
@@ -281,6 +346,10 @@ def main():
         command = commands.add_parser(name)
         command.add_argument("directory")
         command.set_defaults(func=action)
+    launch = commands.add_parser("start", help="run the isolated nodeos process")
+    launch.add_argument("directory")
+    launch.add_argument("--nodeos", default="nodeos", help="path to installed TelosZero nodeos")
+    launch.set_defaults(func=start)
     args = parser.parse_args()
     try:
         args.func(args)
