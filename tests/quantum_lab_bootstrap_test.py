@@ -33,18 +33,29 @@ class QuantumLabBootstrapTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             lab.decode_k1_public_key(bad)
 
+    def test_wrong_release_package_is_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="quantum-lab-package-") as temporary:
+            package = Path(temporary) / "wrong.deb"
+            package.write_bytes(b"not a TelosZero Core release")
+            with self.assertRaises(SystemExit):
+                lab.verify_package(package)
+
     def test_new_identity_and_wrong_api_rejection(self):
         with tempfile.TemporaryDirectory(prefix="quantum-lab-check-") as temporary:
             root = Path(temporary) / "lab"
             timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:00.000")
             key = self.genesis("testnet")["initial_key"]
-            lab.prepare(SimpleNamespace(directory=str(root), public_key=key, timestamp=timestamp))
+            args = SimpleNamespace(directory=str(root), public_key=key,
+                                   timestamp=timestamp, package="verified.deb")
+            with mock.patch.object(lab, "verify_package", return_value=lab.PACKAGE_SHA256):
+                lab.prepare(args)
             manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
             expected = manifest["expected_chain_id"]
             self.assertNotIn(expected, (lab.MAINNET, lab.TESTNET))
             self.assertIsNone(manifest["observed_chain_id"])
+            self.assertEqual(manifest["verified_package_sha256"], lab.PACKAGE_SHA256)
             with self.assertRaises(SystemExit):
-                lab.prepare(SimpleNamespace(directory=str(root), public_key=key, timestamp=timestamp))
+                lab.prepare(args)
             with mock.patch.object(lab, "checked_info", return_value={"chain_id": "a" * 64}):
                 with self.assertRaises(SystemExit):
                     lab.pin(SimpleNamespace(directory=str(root)))
