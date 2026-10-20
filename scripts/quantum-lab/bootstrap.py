@@ -11,7 +11,7 @@ import json
 import os
 from pathlib import Path
 import re
-import sys
+import struct
 import time
 import urllib.request
 
@@ -40,6 +40,8 @@ CONFIG = {
     "max_inline_action_depth": 4,
     "max_authority_depth": 6,
 }
+CONFIG_FIELDS = tuple(CONFIG)
+BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
 
 def fail(message):
@@ -69,12 +71,56 @@ def write_new(path, data, mode=0o600):
         raise
 
 
+def decode_k1_public_key(value):
+    if value.startswith("EOS"):
+        encoded, suffix = value[3:], b""
+    elif value.startswith("PUB_K1_"):
+        encoded, suffix = value[7:], b"K1"
+    else:
+        fail("genesis key must be a K1 public key")
+    if not encoded or any(character not in BASE58 for character in encoded):
+        fail("invalid K1 public-key encoding")
+    number = 0
+    for character in encoded:
+        number = number * 58 + BASE58.index(character)
+    try:
+        payload = number.to_bytes(37, "big")
+    except OverflowError:
+        fail("K1 public key is too large")
+    key, checksum = payload[:33], payload[33:]
+    expected = hashlib.new("ripemd160", key + suffix).digest()[:4]
+    if checksum != expected or key[0] not in (2, 3):
+        fail("invalid K1 public-key checksum or point encoding")
+    return key
+
+
+def genesis_chain_id(genesis):
+    """Match genesis_state::compute_chain_id() in tagged TelosZero Core."""
+    when = dt.datetime.fromisoformat(genesis["initial_timestamp"])
+    if when.tzinfo is not None:
+        fail("genesis timestamp must be UTC without a timezone suffix")
+    delta = when - dt.datetime(1970, 1, 1)
+    microseconds = ((delta.days * 86400 + delta.seconds) * 1000000
+                    + delta.microseconds)
+    configuration = genesis["initial_configuration"]
+    if not set(CONFIG_FIELDS).issubset(configuration):
+        fail("required genesis configuration fields are missing")
+    try:
+        packed = (struct.pack("<Q", microseconds)
+                  + b"\x00"  # K1 variant index
+                  + decode_k1_public_key(genesis["initial_key"])
+                  + struct.pack("<Q" + "I" * 14 + "H" * 2,
+                                *(configuration[name] for name in CONFIG_FIELDS)))
+    except (struct.error, OverflowError) as exc:
+        fail(f"invalid genesis field: {exc}")
+    return hashlib.sha256(packed).hexdigest()
+
+
 def prepare(args):
     root = root_path(args.directory)
     if root.exists():
         fail("target already exists; preparation never overwrites a chain")
-    if not re.fullmatch(r"(?:EOS|PUB_K1_)[1-9A-HJ-NP-Za-km-z]+", args.public_key):
-        fail("genesis key must be a K1 public key")
+    decode_k1_public_key(args.public_key)
     try:
         timestamp = dt.datetime.strptime(args.timestamp, "%Y-%m-%dT%H:%M:%S.%f")
     except ValueError:
@@ -85,15 +131,18 @@ def prepare(args):
     if age < -60 or age > 86400:
         fail("genesis timestamp must be within the last 24 hours, not far in the future")
 
-    root.mkdir(mode=0o700, parents=False)
-    (root / "config").mkdir(mode=0o700)
-    (root / "data").mkdir(mode=0o700)
     genesis = {
         "initial_timestamp": args.timestamp,
         "initial_key": args.public_key,
         "initial_configuration": CONFIG,
     }
+    expected_chain_id = genesis_chain_id(genesis)
+    if expected_chain_id in {MAINNET, TESTNET}:
+        fail("generated genesis matches an existing Telos Zero network")
     genesis_text = json.dumps(genesis, indent=2) + "\n"
+    root.mkdir(mode=0o700, parents=False)
+    (root / "config").mkdir(mode=0o700)
+    (root / "data").mkdir(mode=0o700)
     write_new(root / "genesis.json", genesis_text)
     node_config = """# Private, isolated Quantum Lab bootstrap. Add a lab-only signer line here.
 # signature-provider = PUB_K1_...=KEY:PVT_K1_...
@@ -117,13 +166,15 @@ chain-state-db-size-mb = 1024
         "expected_core_commit": CORE_COMMIT,
         "expected_package_sha256": PACKAGE_SHA256,
         "genesis_sha256": hashlib.sha256(genesis_text.encode()).hexdigest(),
-        "chain_id": None,
+        "expected_chain_id": expected_chain_id,
+        "observed_chain_id": None,
         "http_api": "http://127.0.0.1:8890",
         "p2p": "127.0.0.1:9890",
         "post_quantum_signatures_enabled": False,
     }
     write_new(root / "manifest.json", json.dumps(manifest, indent=2) + "\n")
-    print(f"Prepared {root}. Add a dedicated K1 signer to config/config.ini before starting nodeos.")
+    print(f"Prepared {root}; expected chain ID {expected_chain_id}.")
+    print("Add a dedicated K1 signer to config/config.ini before starting nodeos.")
 
 
 def read_manifest(root):
@@ -136,6 +187,8 @@ def read_manifest(root):
     genesis = (root / "genesis.json").read_bytes()
     if hashlib.sha256(genesis).hexdigest() != manifest.get("genesis_sha256"):
         fail("genesis changed after preparation")
+    if genesis_chain_id(json.loads(genesis)) != manifest.get("expected_chain_id"):
+        fail("manifest chain ID does not match genesis")
     return manifest
 
 
@@ -165,10 +218,12 @@ def checked_info():
 def pin(args):
     root = root_path(args.directory)
     manifest = read_manifest(root)
-    if manifest["chain_id"] is not None:
+    if manifest["observed_chain_id"] is not None:
         fail("chain ID already pinned; never repin an existing network")
     info = checked_info()
-    manifest["chain_id"] = info["chain_id"]
+    if info["chain_id"] != manifest["expected_chain_id"]:
+        fail("API chain ID does not match the prepared genesis")
+    manifest["observed_chain_id"] = info["chain_id"]
     manifest["status"] = "private-chain-observed"
     replacement = root / "manifest.json.new"
     write_new(replacement, json.dumps(manifest, indent=2) + "\n")
@@ -179,15 +234,15 @@ def pin(args):
 def check(args):
     root = root_path(args.directory)
     manifest = read_manifest(root)
-    if not manifest["chain_id"]:
+    if not manifest["observed_chain_id"]:
         fail("pin the new chain ID before checking")
     first = checked_info()
-    if first["chain_id"] != manifest["chain_id"]:
+    if first["chain_id"] != manifest["expected_chain_id"]:
         fail("API chain ID does not match pinned Quantum Lab identity")
     for _ in range(15):
         time.sleep(2)
         second = checked_info()
-        if second["chain_id"] != manifest["chain_id"]:
+        if second["chain_id"] != manifest["expected_chain_id"]:
             fail("API chain ID changed")
         head = int(second.get("head_block_num", 0))
         lib = int(second.get("last_irreversible_block_num", 0))
