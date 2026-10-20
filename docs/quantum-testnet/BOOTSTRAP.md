@@ -50,15 +50,19 @@ a ticket, terminal command, Git, or logs.
 
 ## First start and checks
 
-Start `nodeos` on the lab host with the verified package. Keep it in the
-foreground during initial inspection. The data directory must be empty:
+Start `nodeos` on the lab host after installing the verified package. Keep it
+in the foreground during initial inspection. The data directory must be empty:
 
 ```bash
-nodeos \
-  --config-dir /var/lib/telos-quantum-lab/private-chain/config \
-  --data-dir /var/lib/telos-quantum-lab/private-chain/data \
-  --genesis-json /var/lib/telos-quantum-lab/private-chain/genesis.json
+python3 scripts/quantum-lab/bootstrap.py start \
+  /var/lib/telos-quantum-lab/private-chain --nodeos /usr/bin/nodeos
 ```
+
+`start` checks the manifest, private config, signer public key, loopback-only
+API/P2P settings, and empty first-boot data directory before executing `nodeos`.
+It passes the prepared genesis only on first start. The release package hash
+records what was checked during preparation; the operator must also confirm
+that the installed `nodeos` came from that package.
 
 In another terminal, confirm that port 8890 belongs to this `nodeos`
 process and its command names the intended config/data paths. Then run:
@@ -72,9 +76,8 @@ python3 scripts/quantum-lab/bootstrap.py check \
 
 `pin` is one-time only. It requires the API-reported chain ID to match the
 ID computed from the prepared genesis. `check` requires that ID, an advancing
-head, and an advancing irreversible block. Repeat `check` after two clean node
-restarts. On subsequent starts, omit `--genesis-json`; never use
-`--delete-all-blocks` on a running or retained lab.
+head, and an advancing irreversible block. Repeat `check` after two clean node restarts using the same `start` command.
+Never use `--delete-all-blocks` on a running or retained lab.
 
 This is a private development smoke test. Before a multi-node launch,
 build exact system contracts, document activation and finalizer policy,
