@@ -50,7 +50,7 @@ keys, snapshots, and peer lists are out of scope for reuse.
 
 ## Protocol experiment: ML-DSA account authorization
 
-The core currently serializes K1, R1, and WebAuth key/signature variants.
+The core currently serializes K1, R1, and WebAuth key/signature variants. The proposed wire format and activation path are detailed in [ACCOUNT_SIGNATURE_SPEC.md](ACCOUNT_SIGNATURE_SPEC.md).
 Authorization obtains signing keys by recovering public keys from signatures.
 ML-DSA is not a recoverable-signature scheme. A consensus change must therefore
 define a new, versioned key type and a bounded signature envelope that carries
@@ -62,8 +62,7 @@ scheme or context.
 Use the final NIST FIPS 204 definition of ML-DSA-65. Pin a reviewed
 implementation and test vectors. Reject malformed lengths, noncanonical
 encodings, wrong parameter sets, wrong digest/context, invalid signatures,
-and oversized envelopes before expensive verification. Charge deterministic
-CPU/NET resources for key, signature, and verification work. Define limits
+and oversized envelopes before expensive verification. Define and test CPU/NET limits and signature-verification billing; measured CPU time can vary across nodes. Define limits
 for transaction size, authority storage, API responses, ABI/JSON encoding,
 wallet import/export, and hardware signing before activation.
 
