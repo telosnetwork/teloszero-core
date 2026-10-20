@@ -32,6 +32,8 @@ class QuantumLabBootstrapTests(unittest.TestCase):
         bad = valid[:-1] + ("1" if valid[-1] != "1" else "2")
         with self.assertRaises(SystemExit):
             lab.decode_k1_public_key(bad)
+        with self.assertRaises(SystemExit):
+            lab.decode_k1_public_key("EOS1" + valid[3:])
 
     def test_wrong_release_package_is_rejected(self):
         with tempfile.TemporaryDirectory(prefix="quantum-lab-package-") as temporary:
