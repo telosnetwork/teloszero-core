@@ -18,9 +18,9 @@ finality. See [PROPOSAL.md](PROPOSAL.md) before multi-node or public use.
 The script embeds the `initial_configuration` from the tagged release's
 `genesis/telos_testnet_genesis.json` (file SHA-256:
 `bfd385a8c5618ea86d6ce3091339d567c0d03fe1858810a5f64586f562769720`).
-It replaces the timestamp and initial public key. The resulting serialized
-genesis yields a different chain ID. The script checks the observed ID
-against both existing Telos Zero chain IDs.
+It replaces the timestamp and initial public key, computes the chain ID from
+the serialized genesis, and rejects either existing Telos Zero chain ID.
+The first API response must match this calculated lab ID before it can be pinned.
 
 ## Prepare
 
@@ -65,9 +65,9 @@ python3 scripts/quantum-lab/bootstrap.py check \
   /var/lib/telos-quantum-lab/private-chain
 ```
 
-`pin` is one-time only. It stores the API-reported chain ID after rejecting
-both existing Telos IDs. `check` requires the pinned ID, an advancing head,
-and a visible irreversible block. Repeat `check` after two clean node
+`pin` is one-time only. It requires the API-reported chain ID to match the
+ID computed from the prepared genesis. `check` requires that ID, an advancing
+head, and an advancing irreversible block. Repeat `check` after two clean node
 restarts. On subsequent starts, omit `--genesis-json`; never use
 `--delete-all-blocks` on a running or retained lab.
 
