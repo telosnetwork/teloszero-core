@@ -48,7 +48,10 @@ def fail(message):
 
 def root_path(raw):
     path = Path(raw).expanduser().absolute()
-    if path.is_symlink() or any(part in {"mainnet", "testnet"} for part in path.parts):
+    if path.is_symlink():
+        fail("a Quantum Lab directory must not itself be a symlink")
+    resolved = path.resolve(strict=False)
+    if any("mainnet" in part.lower() or "testnet" in part.lower() for part in (*path.parts, *resolved.parts)):
         fail("use a dedicated non-symlink Quantum Lab path, away from existing networks")
     if path == Path("/"):
         fail("refusing filesystem root")
@@ -78,8 +81,9 @@ def prepare(args):
         fail("timestamp must be UTC as YYYY-MM-DDTHH:MM:SS.000")
     if timestamp.microsecond != 0 or timestamp.second != 0:
         fail("use a whole UTC minute for deterministic genesis")
-    if abs((dt.datetime.now(dt.timezone.utc).replace(tzinfo=None) - timestamp).total_seconds()) > 86400:
-        fail("genesis timestamp must be within 24 hours of preparation")
+    age = (dt.datetime.now(dt.timezone.utc).replace(tzinfo=None) - timestamp).total_seconds()
+    if age < -60 or age > 86400:
+        fail("genesis timestamp must be within the last 24 hours, not far in the future")
 
     root.mkdir(mode=0o700, parents=False)
     (root / "config").mkdir(mode=0o700)
@@ -180,14 +184,17 @@ def check(args):
     first = checked_info()
     if first["chain_id"] != manifest["chain_id"]:
         fail("API chain ID does not match pinned Quantum Lab identity")
-    time.sleep(2)
-    second = checked_info()
-    if second["chain_id"] != manifest["chain_id"]:
-        fail("API chain ID changed")
-    head = int(second.get("head_block_num", 0))
-    lib = int(second.get("last_irreversible_block_num", 0))
-    if head <= int(first.get("head_block_num", 0)) or lib < 1:
-        fail("head is not advancing or no irreversible block is visible")
+    for _ in range(15):
+        time.sleep(2)
+        second = checked_info()
+        if second["chain_id"] != manifest["chain_id"]:
+            fail("API chain ID changed")
+        head = int(second.get("head_block_num", 0))
+        lib = int(second.get("last_irreversible_block_num", 0))
+        if head > int(first.get("head_block_num", 0)) and lib > int(first.get("last_irreversible_block_num", 0)):
+            break
+    else:
+        fail("head or irreversible block did not advance within 30 seconds")
     print(f"Quantum Lab identity OK; head {head}; LIB {lib}. PQ signatures are not enabled.")
 
 
