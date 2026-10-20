@@ -113,9 +113,9 @@ chain-state-db-size-mb = 1024
     manifest = {
         "network": "Telos Zero Quantum Lab (private bootstrap)",
         "status": "prepared-not-started",
-        "core_tag": CORE_TAG,
-        "core_commit": CORE_COMMIT,
-        "package_sha256": PACKAGE_SHA256,
+        "expected_core_tag": CORE_TAG,
+        "expected_core_commit": CORE_COMMIT,
+        "expected_package_sha256": PACKAGE_SHA256,
         "genesis_sha256": hashlib.sha256(genesis_text.encode()).hexdigest(),
         "chain_id": None,
         "http_api": "http://127.0.0.1:8890",
