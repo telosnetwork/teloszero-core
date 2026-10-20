@@ -28,7 +28,7 @@ On the isolated host, after verifying the binary and generating a fresh
 K1 keypair:
 
 ```bash
-sudo install -d -m 0700 /var/lib/telos-quantum-lab
+sudo install -d -m 0700 -o "$USER" -g "$(id -gn)" /var/lib/telos-quantum-lab
 # Prepare requires a path that does not already exist:
 python3 scripts/quantum-lab/bootstrap.py prepare \
   /var/lib/telos-quantum-lab/private-chain \
