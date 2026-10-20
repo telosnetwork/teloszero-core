@@ -1,0 +1,214 @@
+#!/usr/bin/env python3
+"""Prepare and check an isolated, classical Telos Zero Quantum Lab bootstrap.
+
+This stage creates a new chain identity. It does not add post-quantum signing.
+"""
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import sys
+import time
+import urllib.request
+
+
+MAINNET = "4667b205c6838ef70ff7988f6e8257e8be0e1284a2f59699054a018f743b1d11"
+TESTNET = "1eaa0824707c8c16bd25145493bf062aecddfeb56c736f6ba6397f3195f33c9f"
+CORE_TAG = "teloszero-v1.2.2"
+CORE_COMMIT = "fcb9f5fc627619a8b06cd6b871c462b1d70d3aa4"
+PACKAGE_SHA256 = "285fdfc1abde5104892d94b1f380c6d79aba35eac3413f139119ea88574c5007"
+CONFIG = {
+    "max_block_net_usage": 1048576,
+    "target_block_net_usage_pct": 1000,
+    "max_transaction_net_usage": 524288,
+    "base_per_transaction_net_usage": 12,
+    "net_usage_leeway": 500,
+    "context_free_discount_net_usage_num": 20,
+    "context_free_discount_net_usage_den": 100,
+    "max_block_cpu_usage": 5000000,
+    "target_block_cpu_usage_pct": 1000,
+    "max_transaction_cpu_usage": 150000,
+    "min_transaction_cpu_usage": 100,
+    "max_transaction_lifetime": 3600,
+    "deferred_trx_expiration_window": 600,
+    "max_transaction_delay": 3888000,
+    "max_inline_action_size": 4096,
+    "max_inline_action_depth": 4,
+    "max_authority_depth": 6,
+}
+
+
+def fail(message):
+    raise SystemExit(f"error: {message}")
+
+
+def root_path(raw):
+    path = Path(raw).expanduser().absolute()
+    if path.is_symlink() or any(part in {"mainnet", "testnet"} for part in path.parts):
+        fail("use a dedicated non-symlink Quantum Lab path, away from existing networks")
+    if path == Path("/"):
+        fail("refusing filesystem root")
+    return path
+
+
+def write_new(path, data, mode=0o600):
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    fd = os.open(path, flags, mode)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            out.write(data)
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+
+
+def prepare(args):
+    root = root_path(args.directory)
+    if root.exists():
+        fail("target already exists; preparation never overwrites a chain")
+    if not re.fullmatch(r"(?:EOS|PUB_K1_)[1-9A-HJ-NP-Za-km-z]+", args.public_key):
+        fail("genesis key must be a K1 public key")
+    try:
+        timestamp = dt.datetime.strptime(args.timestamp, "%Y-%m-%dT%H:%M:%S.%f")
+    except ValueError:
+        fail("timestamp must be UTC as YYYY-MM-DDTHH:MM:SS.000")
+    if timestamp.microsecond != 0 or timestamp.second != 0:
+        fail("use a whole UTC minute for deterministic genesis")
+    if abs((dt.datetime.now(dt.timezone.utc).replace(tzinfo=None) - timestamp).total_seconds()) > 86400:
+        fail("genesis timestamp must be within 24 hours of preparation")
+
+    root.mkdir(mode=0o700, parents=False)
+    (root / "config").mkdir(mode=0o700)
+    (root / "data").mkdir(mode=0o700)
+    genesis = {
+        "initial_timestamp": args.timestamp,
+        "initial_key": args.public_key,
+        "initial_configuration": CONFIG,
+    }
+    genesis_text = json.dumps(genesis, indent=2) + "\n"
+    write_new(root / "genesis.json", genesis_text)
+    node_config = """# Private, isolated Quantum Lab bootstrap. Add a lab-only signer line here.
+# signature-provider = PUB_K1_...=KEY:PVT_K1_...
+# Never paste a mainnet/testnet or account owner key.
+http-server-address = 127.0.0.1:8890
+p2p-listen-endpoint = 127.0.0.1:9890
+plugin = eosio::http_plugin
+plugin = eosio::chain_plugin
+plugin = eosio::chain_api_plugin
+plugin = eosio::net_plugin
+plugin = eosio::producer_plugin
+producer-name = eosio
+enable-stale-production = true
+chain-state-db-size-mb = 1024
+"""
+    write_new(root / "config" / "config.ini", node_config)
+    manifest = {
+        "network": "Telos Zero Quantum Lab (private bootstrap)",
+        "status": "prepared-not-started",
+        "core_tag": CORE_TAG,
+        "core_commit": CORE_COMMIT,
+        "package_sha256": PACKAGE_SHA256,
+        "genesis_sha256": hashlib.sha256(genesis_text.encode()).hexdigest(),
+        "chain_id": None,
+        "http_api": "http://127.0.0.1:8890",
+        "p2p": "127.0.0.1:9890",
+        "post_quantum_signatures_enabled": False,
+    }
+    write_new(root / "manifest.json", json.dumps(manifest, indent=2) + "\n")
+    print(f"Prepared {root}. Add a dedicated K1 signer to config/config.ini before starting nodeos.")
+
+
+def read_manifest(root):
+    marker = root / "manifest.json"
+    if not marker.is_file():
+        fail("Quantum Lab manifest missing")
+    manifest = json.loads(marker.read_text(encoding="utf-8"))
+    if manifest.get("network") != "Telos Zero Quantum Lab (private bootstrap)":
+        fail("unexpected manifest network")
+    genesis = (root / "genesis.json").read_bytes()
+    if hashlib.sha256(genesis).hexdigest() != manifest.get("genesis_sha256"):
+        fail("genesis changed after preparation")
+    return manifest
+
+
+def get_info():
+    request = urllib.request.Request(
+        "http://127.0.0.1:8890/v1/chain/get_info",
+        data=b"{}",
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=5) as response:
+        if response.status != 200:
+            fail(f"API returned HTTP {response.status}")
+        return json.load(response)
+
+
+def checked_info():
+    info = get_info()
+    chain_id = info.get("chain_id", "")
+    if not re.fullmatch(r"[0-9a-f]{64}", chain_id):
+        fail("invalid chain ID from API")
+    if chain_id in {MAINNET, TESTNET}:
+        fail("API is serving a real Telos network; stop and investigate")
+    return info
+
+
+def pin(args):
+    root = root_path(args.directory)
+    manifest = read_manifest(root)
+    if manifest["chain_id"] is not None:
+        fail("chain ID already pinned; never repin an existing network")
+    info = checked_info()
+    manifest["chain_id"] = info["chain_id"]
+    manifest["status"] = "private-chain-observed"
+    replacement = root / "manifest.json.new"
+    write_new(replacement, json.dumps(manifest, indent=2) + "\n")
+    os.replace(replacement, root / "manifest.json")
+    print(f"Pinned lab chain ID: {info['chain_id']}")
+
+
+def check(args):
+    root = root_path(args.directory)
+    manifest = read_manifest(root)
+    if not manifest["chain_id"]:
+        fail("pin the new chain ID before checking")
+    first = checked_info()
+    if first["chain_id"] != manifest["chain_id"]:
+        fail("API chain ID does not match pinned Quantum Lab identity")
+    time.sleep(2)
+    second = checked_info()
+    if second["chain_id"] != manifest["chain_id"]:
+        fail("API chain ID changed")
+    head = int(second.get("head_block_num", 0))
+    lib = int(second.get("last_irreversible_block_num", 0))
+    if head <= int(first.get("head_block_num", 0)) or lib < 1:
+        fail("head is not advancing or no irreversible block is visible")
+    print(f"Quantum Lab identity OK; head {head}; LIB {lib}. PQ signatures are not enabled.")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    prep = commands.add_parser("prepare", help="create a new isolated genesis and config")
+    prep.add_argument("directory")
+    prep.add_argument("--public-key", required=True)
+    prep.add_argument("--timestamp", required=True)
+    prep.set_defaults(func=prepare)
+    for name, action in (("pin", pin), ("check", check)):
+        command = commands.add_parser(name)
+        command.add_argument("directory")
+        command.set_defaults(func=action)
+    args = parser.parse_args()
+    try:
+        args.func(args)
+    except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
+        fail(str(exc))
+
+
+if __name__ == "__main__":
+    main()
