@@ -96,10 +96,11 @@ def decode_k1_public_key(value):
     number = 0
     for character in encoded:
         number = number * 58 + BASE58.index(character)
-    try:
-        payload = number.to_bytes(37, "big")
-    except OverflowError:
-        fail("K1 public key is too large")
+    leading_zeroes = len(encoded) - len(encoded.lstrip("1"))
+    width = (number.bit_length() + 7) // 8
+    payload = b"\x00" * leading_zeroes + number.to_bytes(width, "big")
+    if len(payload) != 37:
+        fail("K1 public key must decode to exactly 37 bytes")
     key, checksum = payload[:33], payload[33:]
     expected = hashlib.new("ripemd160", key + suffix).digest()[:4]
     if checksum != expected or key[0] not in (2, 3):
