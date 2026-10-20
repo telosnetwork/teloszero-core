@@ -72,6 +72,28 @@ class QuantumLabBootstrapTests(unittest.TestCase):
                  mock.patch.object(lab.time, "sleep"):
                 lab.check(SimpleNamespace(directory=str(root)))
 
+    def test_start_accepts_only_private_prepared_config(self):
+        with tempfile.TemporaryDirectory(prefix="quantum-lab-start-") as temporary:
+            root = Path(temporary) / "lab"
+            key = self.genesis("testnet")["initial_key"]
+            timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:00.000")
+            args = SimpleNamespace(directory=str(root), public_key=key,
+                                   timestamp=timestamp, package="verified.deb")
+            with mock.patch.object(lab, "verify_package", return_value=lab.PACKAGE_SHA256):
+                lab.prepare(args)
+            config = root / "config" / "config.ini"
+            config.write_text(config.read_text() + f"signature-provider = {key}=KEY:TEST_ONLY\n")
+            lab.validate_private_config(root)
+            with mock.patch.object(lab.shutil, "which", return_value="/usr/bin/nodeos"), \
+                 mock.patch.object(lab.os, "execv") as execute:
+                lab.start(SimpleNamespace(directory=str(root), nodeos="nodeos"))
+            command = execute.call_args.args[1]
+            self.assertIn("--genesis-json", command)
+            self.assertNotIn("TEST_ONLY", " ".join(command))
+            config.write_text(config.read_text() + "p2p-peer-address = mainnet.example:9876\n")
+            with self.assertRaises(SystemExit):
+                lab.validate_private_config(root)
+
 
 if __name__ == "__main__":
     unittest.main()
