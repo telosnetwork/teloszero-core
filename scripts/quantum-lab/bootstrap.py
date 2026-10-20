@@ -71,6 +71,19 @@ def write_new(path, data, mode=0o600):
         raise
 
 
+def verify_package(path):
+    package = Path(path).expanduser().resolve(strict=True)
+    if not package.is_file():
+        fail("release package must be a regular file")
+    digest = hashlib.sha256()
+    with package.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    if digest.hexdigest() != PACKAGE_SHA256:
+        fail("TelosZero Core package checksum does not match the pinned release")
+    return digest.hexdigest()
+
+
 def decode_k1_public_key(value):
     if value.startswith("EOS"):
         encoded, suffix = value[3:], b""
@@ -120,6 +133,7 @@ def prepare(args):
     root = root_path(args.directory)
     if root.exists():
         fail("target already exists; preparation never overwrites a chain")
+    package_sha256 = verify_package(args.package)
     decode_k1_public_key(args.public_key)
     try:
         timestamp = dt.datetime.strptime(args.timestamp, "%Y-%m-%dT%H:%M:%S.%f")
@@ -164,7 +178,7 @@ chain-state-db-size-mb = 1024
         "status": "prepared-not-started",
         "expected_core_tag": CORE_TAG,
         "expected_core_commit": CORE_COMMIT,
-        "expected_package_sha256": PACKAGE_SHA256,
+        "verified_package_sha256": package_sha256,
         "genesis_sha256": hashlib.sha256(genesis_text.encode()).hexdigest(),
         "expected_chain_id": expected_chain_id,
         "observed_chain_id": None,
@@ -258,6 +272,7 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     prep = commands.add_parser("prepare", help="create a new isolated genesis and config")
     prep.add_argument("directory")
+    prep.add_argument("--package", required=True, help="verified teloszero-core_1.2.2_amd64.deb")
     prep.add_argument("--public-key", required=True)
     prep.add_argument("--timestamp", required=True)
     prep.set_defaults(func=prepare)
