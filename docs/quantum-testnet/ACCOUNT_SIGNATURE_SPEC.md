@@ -44,7 +44,7 @@ The verification function must be deterministic across independently built nodes
 - Index 3 rejects before activation on all transaction and authority paths; all nodes agree at the activation block and after restart.
 - Duplicate randomized signatures from the same embedded key reject under existing duplicate-key policy.
 - Mixed authority cases show exactly which threshold paths remain classical.
-- Independent builds agree on acceptance, state roots, CPU/NET charges, and fork/replay results. Include fuzzing around unpack boundaries and key import.
+- Independent builds agree on acceptance, state roots, NET accounting, CPU-limit policy, and fork/replay results. Record observed verification time separately because wall-clock CPU measurements vary. Include fuzzing around unpack boundaries and key import.
 - Live lab blocks and LIB progress only after system contracts and Savanna finalizer setup are independently validated.
 
 The standalone probe in `tools/quantum-lab/mldsa65_probe.cpp` exercises key generation, public-only import, and primitive verification only. It is not a substitute for the above consensus tests.
