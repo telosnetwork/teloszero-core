@@ -45,6 +45,8 @@ std::vector<unsigned char> encode_envelope(
 bool decode_envelope(const std::vector<unsigned char>& encoded,
                      std::vector<unsigned char>& public_key,
                      std::vector<unsigned char>& signature) {
+   public_key.clear();
+   signature.clear();
    if (encoded.size() != mldsa_wire_size || encoded[0] != mldsa_variant_tag)
       return false;
    public_key.assign(encoded.begin() + 1, encoded.begin() + 1 + mldsa_public_size);
@@ -129,6 +131,8 @@ int main() {
       invalid_envelope[0] = 2;
       require(!decode_envelope(invalid_envelope, decoded_public, decoded_signature),
               "wrong variant accepted");
+      require(decoded_public.empty() && decoded_signature.empty(),
+              "invalid envelope retained decoded bytes");
       invalid_envelope = encoded;
       invalid_envelope.pop_back();
       require(!decode_envelope(invalid_envelope, decoded_public, decoded_signature),
@@ -137,6 +141,8 @@ int main() {
       invalid_envelope.push_back(0);
       require(!decode_envelope(invalid_envelope, decoded_public, decoded_signature),
               "trailing envelope byte accepted");
+      require(decode_envelope(encoded, decoded_public, decoded_signature),
+              "valid envelope rejected after malformed input");
 
       owner<EVP_PKEY_CTX, EVP_PKEY_CTX_free> importer(
          EVP_PKEY_CTX_new_from_name(nullptr, "ML-DSA-65", nullptr), EVP_PKEY_CTX_free);
