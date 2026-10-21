@@ -31,6 +31,32 @@ using pure ML-DSA with a candidate context string
 public-key-only import and rejects a changed digest, changed context,
 and changed signature.
 
+## Pinned BoringSSL API check
+
+TelosZero Core 1.2.2 pins BoringSSL submodule commit
+`2587c4974dbe9872451151c8e975f58567a1ce0d`. The separate
+`tools/quantum-lab/mldsa65_boringssl_probe.cpp` calls that revision's
+`MLDSA65_generate_key`, `MLDSA65_sign`, `MLDSA65_parse_public_key`,
+and `MLDSA65_verify` directly. It checks the same domain context and
+negative cases, including truncated public-key parsing. The source can
+be compiled against the repository's initialized BoringSSL submodule
+after building its `crypto` target:
+
+```bash
+cmake -S libraries/libfc/libraries/boringssl/bssl -B /tmp/telos-bssl-build \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build /tmp/telos-bssl-build --target crypto -j 4
+c++ -std=c++17 -Wall -Wextra -Werror \
+  -Ilibraries/libfc/libraries/boringssl/bssl/include \
+  tools/quantum-lab/mldsa65_boringssl_probe.cpp \
+  /tmp/telos-bssl-build/libcrypto.a -o /tmp/telos-bssl-probe
+/tmp/telos-bssl-probe
+```
+
+The probe compiled and passed on macOS arm64 against the exact pinned
+BoringSSL commit. This is an API and primitive check, not a TelosZero
+build, transaction acceptance test, or consensus result.
+
 These results fix the approximate size and API behavior to evaluate during
 the protocol design. They do not establish consensus determinism, correct
 transaction-digest construction, CPU/NET billing, historical replay,
