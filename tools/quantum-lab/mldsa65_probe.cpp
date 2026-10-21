@@ -15,12 +15,41 @@
 namespace {
 constexpr char context[] = "TelosZero-QuantumLab-TX-v1";
 constexpr char other_context[] = "TelosZero-QuantumLab-OTHER";
+constexpr unsigned char mldsa_variant_tag = 3;
+constexpr size_t mldsa_public_size = 1952;
+constexpr size_t mldsa_signature_size = 3309;
+constexpr size_t mldsa_wire_size = 1 + mldsa_public_size + mldsa_signature_size;
 
 template <typename T, void (*Free)(T*)>
 using owner = std::unique_ptr<T, decltype(Free)>;
 
 void require(bool condition, const char* message) {
    if (!condition) throw std::runtime_error(message);
+}
+
+// Experimental fixed-width fc::raw variant-3 representation. The full
+// TelosZero serializer must independently confirm this byte layout.
+std::vector<unsigned char> encode_envelope(
+   const std::vector<unsigned char>& public_key,
+   const std::vector<unsigned char>& signature) {
+   require(public_key.size() == mldsa_public_size, "invalid envelope public-key length");
+   require(signature.size() == mldsa_signature_size, "invalid envelope signature length");
+   std::vector<unsigned char> encoded;
+   encoded.reserve(mldsa_wire_size);
+   encoded.push_back(mldsa_variant_tag);
+   encoded.insert(encoded.end(), public_key.begin(), public_key.end());
+   encoded.insert(encoded.end(), signature.begin(), signature.end());
+   return encoded;
+}
+
+bool decode_envelope(const std::vector<unsigned char>& encoded,
+                     std::vector<unsigned char>& public_key,
+                     std::vector<unsigned char>& signature) {
+   if (encoded.size() != mldsa_wire_size || encoded[0] != mldsa_variant_tag)
+      return false;
+   public_key.assign(encoded.begin() + 1, encoded.begin() + 1 + mldsa_public_size);
+   signature.assign(encoded.begin() + 1 + mldsa_public_size, encoded.end());
+   return true;
 }
 
 OSSL_PARAM context_parameter(const char* value) {
@@ -64,21 +93,8 @@ int main() {
                                                &public_size) == 1,
               "public-key export failed");
       public_bytes.resize(public_size);
-      require(public_bytes.size() == 1952, "unexpected ML-DSA-65 public-key size");
-
-      owner<EVP_PKEY_CTX, EVP_PKEY_CTX_free> importer(
-         EVP_PKEY_CTX_new_from_name(nullptr, "ML-DSA-65", nullptr), EVP_PKEY_CTX_free);
-      require(importer && EVP_PKEY_fromdata_init(importer.get()) == 1,
-              "public-key importer unavailable");
-      OSSL_PARAM import_parameters[] = {
-         OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY,
-                                           public_bytes.data(), public_bytes.size()),
-         OSSL_PARAM_construct_end()
-      };
-      EVP_PKEY* imported = nullptr;
-      require(EVP_PKEY_fromdata(importer.get(), &imported, EVP_PKEY_PUBLIC_KEY,
-                                import_parameters) == 1, "public-key import failed");
-      owner<EVP_PKEY, EVP_PKEY_free> public_only(imported, EVP_PKEY_free);
+      require(public_bytes.size() == mldsa_public_size,
+              "unexpected ML-DSA-65 public-key size");
 
       std::array<unsigned char, 32> digest{};
       for (size_t i = 0; i < digest.size(); ++i) digest[i] = static_cast<unsigned char>(i);
@@ -99,9 +115,44 @@ int main() {
                             digest.data(), digest.size()) == 1,
               "ML-DSA signing failed");
       signature.resize(signature_size);
-      require(signature.size() == 3309, "unexpected ML-DSA-65 signature size");
+      require(signature.size() == mldsa_signature_size,
+              "unexpected ML-DSA-65 signature size");
 
-      require(verify(public_only.get(), signature, digest, context),
+      auto encoded = encode_envelope(public_bytes, signature);
+      require(encoded.size() == mldsa_wire_size, "unexpected envelope size");
+      std::vector<unsigned char> decoded_public, decoded_signature;
+      require(decode_envelope(encoded, decoded_public, decoded_signature),
+              "valid envelope rejected");
+      require(decoded_public == public_bytes && decoded_signature == signature,
+              "envelope round-trip changed bytes");
+      auto invalid_envelope = encoded;
+      invalid_envelope[0] = 2;
+      require(!decode_envelope(invalid_envelope, decoded_public, decoded_signature),
+              "wrong variant accepted");
+      invalid_envelope = encoded;
+      invalid_envelope.pop_back();
+      require(!decode_envelope(invalid_envelope, decoded_public, decoded_signature),
+              "truncated envelope accepted");
+      invalid_envelope = encoded;
+      invalid_envelope.push_back(0);
+      require(!decode_envelope(invalid_envelope, decoded_public, decoded_signature),
+              "trailing envelope byte accepted");
+
+      owner<EVP_PKEY_CTX, EVP_PKEY_CTX_free> importer(
+         EVP_PKEY_CTX_new_from_name(nullptr, "ML-DSA-65", nullptr), EVP_PKEY_CTX_free);
+      require(importer && EVP_PKEY_fromdata_init(importer.get()) == 1,
+              "public-key importer unavailable");
+      OSSL_PARAM import_parameters[] = {
+         OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY,
+                                           decoded_public.data(), decoded_public.size()),
+         OSSL_PARAM_construct_end()
+      };
+      EVP_PKEY* imported = nullptr;
+      require(EVP_PKEY_fromdata(importer.get(), &imported, EVP_PKEY_PUBLIC_KEY,
+                                import_parameters) == 1, "public-key import failed");
+      owner<EVP_PKEY, EVP_PKEY_free> public_only(imported, EVP_PKEY_free);
+
+      require(verify(public_only.get(), decoded_signature, digest, context),
               "valid signature rejected");
       require(!verify(public_only.get(), signature, digest, other_context),
               "wrong context accepted");
@@ -115,7 +166,7 @@ int main() {
 
       std::cout << "ML-DSA-65 probe passed: public key " << public_bytes.size()
                 << " bytes, signature " << signature.size()
-                << " bytes, bare envelope " << public_bytes.size() + signature.size()
+                << " bytes, tagged envelope " << encoded.size()
                 << " bytes. No chain authorization was exercised.\n";
       return 0;
    } catch (const std::exception& error) {
