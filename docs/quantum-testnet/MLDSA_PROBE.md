@@ -20,9 +20,7 @@ c++ -std=c++17 -Wall -Wextra -Werror \
 ```
 
 On OpenSSL 3.6.4, the probe passed with a 1,952-byte public key, a
-3,309-byte signature, and 5,261 bytes for the bare public-key/signature
-envelope. This excludes key-type tags, serialization lengths, transaction
-headers, and action payloads. The program signs a 32-byte sample digest
+3,309-byte signature, 5,261 bytes for the bare public-key/signature payload, and 5,262 bytes with the proposed one-byte variant-3 tag. This excludes transaction headers and action payloads. The probe checks a fixed-width tagged round trip and rejects wrong tags, truncation, and trailing bytes; the actual fc::raw serializer still needs a golden-byte test. The program signs a 32-byte sample digest
 using pure ML-DSA with a candidate context string
 `TelosZero-QuantumLab-TX-v1`. It verifies the signature through a
 public-key-only import and rejects a changed digest, changed context,
