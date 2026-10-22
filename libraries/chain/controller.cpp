@@ -2635,7 +2635,11 @@ struct controller_impl {
       });
 
       db.create<protocol_state_object>([&](auto& pso ){
-         pso.num_supported_key_types = config::genesis_num_supported_key_types;
+         // A separate experimental genesis is the only chain that activates variant 3.
+         // Existing mainnet and testnet retain their protocol key-type limits.
+         const chain_id_type pq_lab_chain_id("01fd49dc25b64a7288ac34a0145b5581882dfac0c4e2bfadc7f3200ef4b5d99f");
+         pso.num_supported_key_types = chain_id == pq_lab_chain_id
+            ? 4 : config::genesis_num_supported_key_types;
          for( const auto& i : genesis_intrinsics ) {
             add_intrinsic_to_whitelist( pso.whitelisted_intrinsics, i );
          }
@@ -6341,7 +6345,7 @@ void controller_impl::on_activation<builtin_protocol_feature_t::replace_deferred
 template<>
 void controller_impl::on_activation<builtin_protocol_feature_t::webauthn_key>() {
    db.modify( db.get<protocol_state_object>(), [&]( auto& ps ) {
-      ps.num_supported_key_types = 3;
+      ps.num_supported_key_types = std::max<uint32_t>(ps.num_supported_key_types, 3);
    } );
 }
 

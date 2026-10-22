@@ -12,14 +12,15 @@ namespace fc { namespace crypto {
       constexpr const char* private_key_base_prefix = "PVT";
       constexpr const char* private_key_prefix[] = {
          "K1",
-         "R1"
+         "R1",
+         "MLDSA65"
       };
    };
 
    class private_key
    {
       public:
-         using storage_type = std::variant<ecc::private_key_shim, r1::private_key_shim>;
+         using storage_type = std::variant<ecc::private_key_shim, r1::private_key_shim, mldsa65::private_key_shim>;
 
          private_key() = default;
          private_key( private_key&& ) = default;
@@ -43,6 +44,10 @@ namespace fc { namespace crypto {
          template< typename KeyType = ecc::private_key_shim >
          static private_key regenerate( const typename KeyType::data_type& data ) {
             return private_key(storage_type(KeyType(data)));
+         }
+
+         static private_key generate_mldsa65() {
+            return private_key(storage_type(mldsa65::private_key_shim::generate()));
          }
 
          // serialize to/from string

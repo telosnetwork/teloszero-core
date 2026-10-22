@@ -4,6 +4,7 @@ add_executable( test_fc
         crypto/test_cypher_suites.cpp
         crypto/test_hash_functions.cpp
         crypto/test_k1_recover.cpp
+        crypto/test_mldsa65.cpp
         crypto/test_modular_arithmetic.cpp
         crypto/test_webauthn.cpp
         io/test_cfile.cpp

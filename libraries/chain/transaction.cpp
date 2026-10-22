@@ -66,7 +66,10 @@ fc::microseconds transaction::get_signature_keys( const vector<signature_type>& 
    if ( !signatures.empty() ) {
       const digest_type digest = sig_digest(chain_id, cfd);
 
+      const chain_id_type pq_lab_chain_id("01fd49dc25b64a7288ac34a0145b5581882dfac0c4e2bfadc7f3200ef4b5d99f");
       for(const signature_type& sig : signatures) {
+         EOS_ASSERT(sig.which() < 3 || chain_id == pq_lab_chain_id,
+                    unactivated_key_type, "ML-DSA-65 signatures are enabled only on the isolated Quantum Lab chain");
          auto now = fc::time_point::now();
          EOS_ASSERT( now < deadline, tx_cpu_usage_exceeded, "transaction signature verification executed for too long ${time}us",
                      ("time", now - start)("now", now)("deadline", deadline)("start", start) );

@@ -252,7 +252,7 @@ void add_standard_transaction_options(CLI::App* cmd, string default_permission =
 }
 
 bool is_public_key_str(const std::string& potential_key_str) {
-   return boost::istarts_with(potential_key_str, "EOS") || boost::istarts_with(potential_key_str, "PUB_R1") ||  boost::istarts_with(potential_key_str, "PUB_K1") ||  boost::istarts_with(potential_key_str, "PUB_WA");
+   return boost::istarts_with(potential_key_str, "EOS") || boost::istarts_with(potential_key_str, "PUB_R1") ||  boost::istarts_with(potential_key_str, "PUB_K1") ||  boost::istarts_with(potential_key_str, "PUB_WA") || boost::istarts_with(potential_key_str, "PUB_MLDSA65");
 }
 
 name to_default_token_contract(const asset& a) {
@@ -2905,16 +2905,19 @@ int main( int argc, char** argv ) {
    create->require_subcommand();
 
    bool r1 = false;
+   bool mldsa65 = false;
    string key_file;
    bool print_console = false;
    // create key
-   auto create_key = create->add_subcommand("key", localized("Create a new keypair and print the public and private keys"))->callback( [&r1, &key_file, &print_console](){
+   auto create_key = create->add_subcommand("key", localized("Create a new keypair and print the public and private keys"))->callback( [&r1, &mldsa65, &key_file, &print_console](){
       if (key_file.empty() && !print_console) {
          std::cerr << "ERROR: Either indicate a file using \"--file\" or pass \"--to-console\"" << std::endl;
          return;
       }
 
-      auto pk    = r1 ? private_key_type::generate_r1() : private_key_type::generate();
+      FC_ASSERT(!(r1 && mldsa65), "Choose one key type");
+      auto pk = mldsa65 ? private_key_type::generate_mldsa65()
+                        : (r1 ? private_key_type::generate_r1() : private_key_type::generate());
       auto privs = pk.to_string({});
       auto pubs  = pk.get_public_key().to_string({});
       if (print_console) {
@@ -2928,6 +2931,7 @@ int main( int argc, char** argv ) {
       }
    });
    create_key->add_flag( "--r1", r1, "Generate a key using the R1 curve (iPhone), instead of the K1 curve (Bitcoin)"  );
+   create_key->add_flag( "--mldsa65", mldsa65, "Generate an experimental Quantum Lab ML-DSA-65 signing key" );
    create_key->add_option("-f,--file", key_file, localized("Name of file to write private/public key output to. (Must be set, unless \"--to-console\" is passed"));
    create_key->add_flag( "--to-console", print_console, localized("Print private/public keys to console."));
 
@@ -3959,7 +3963,7 @@ int main( int argc, char** argv ) {
    string wallet_create_key_type;
    auto createKeyInWallet = wallet->add_subcommand("create_key", localized("Create private key within wallet"));
    createKeyInWallet->add_option("-n,--name", wallet_name, localized("The name of the wallet to create key into"))->capture_default_str();
-   createKeyInWallet->add_option("key_type", wallet_create_key_type, localized("Key type to create (K1/R1)"))->type_name("K1/R1")->capture_default_str();
+   createKeyInWallet->add_option("key_type", wallet_create_key_type, localized("Key type to create (K1/R1/MLDSA65)"))->type_name("K1/R1/MLDSA65")->capture_default_str();
    createKeyInWallet->callback([&wallet_name, &wallet_create_key_type] {
       //an empty key type is allowed -- it will let the underlying wallet pick which type it prefers
       fc::variants vs = {fc::variant(wallet_name), fc::variant(wallet_create_key_type)};

@@ -51,6 +51,11 @@ namespace fc { namespace crypto {
          return key.generate_shared_secret(std::template get<PublicKeyType>(_pub_storage));
       }
 
+      sha512 operator()(const mldsa65::private_key_shim&) const {
+         FC_ASSERT(false, "ML-DSA-65 is a signing key, not a key agreement key");
+         return {};
+      }
+
       const public_key::storage_type&  _pub_storage;
    };
 

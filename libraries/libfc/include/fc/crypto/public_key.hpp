@@ -2,6 +2,7 @@
 #include <fc/crypto/elliptic.hpp>
 #include <fc/crypto/elliptic_r1.hpp>
 #include <fc/crypto/elliptic_webauthn.hpp>
+#include <fc/crypto/mldsa65.hpp>
 #include <fc/crypto/signature.hpp>
 #include <fc/reflect/reflect.hpp>
 #include <fc/reflect/variant.hpp>
@@ -14,14 +15,15 @@ namespace fc { namespace crypto {
       constexpr const char* public_key_prefix[] = {
          "K1",
          "R1",
-         "WA"
+         "WA",
+         "MLDSA65"
       };
    };
 
    class public_key
    {
       public:
-         using storage_type = std::variant<ecc::public_key_shim, r1::public_key_shim, webauthn::public_key>;
+         using storage_type = std::variant<ecc::public_key_shim, r1::public_key_shim, webauthn::public_key, mldsa65::public_key_shim>;
 
          public_key() = default;
          public_key( public_key&& ) = default;

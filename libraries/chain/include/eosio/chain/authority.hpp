@@ -4,10 +4,22 @@
 #include <eosio/chain/config.hpp>
 
 #include <type_traits>
+#include <cstring>
 
 namespace eosio { namespace chain {
 
-using shared_public_key_data = std::variant<fc::ecc::public_key_shim, fc::crypto::r1::public_key_shim, shared_string>;
+// Keep the large PQ key out of the inline variant storage for ordinary accounts.
+struct shared_mldsa65_public_key {
+   shared_mldsa65_public_key() = default;
+   explicit shared_mldsa65_public_key(size_t size) : bytes(size, boost::container::default_init_t()) {}
+   shared_string bytes;
+
+   friend bool operator==(const shared_mldsa65_public_key& a, const shared_mldsa65_public_key& b) {
+      return a.bytes == b.bytes;
+   }
+};
+using shared_public_key_data = std::variant<fc::ecc::public_key_shim, fc::crypto::r1::public_key_shim,
+                                             shared_string, shared_mldsa65_public_key>;
 
 struct shared_public_key {
    explicit shared_public_key( shared_public_key_data&& p ) :
@@ -24,6 +36,13 @@ struct shared_public_key {
             fc::crypto::webauthn::public_key pub;
             fc::raw::unpack(ds, pub);
             public_key_storage = pub;
+         },
+         [&](const shared_mldsa65_public_key& pq) {
+            FC_ASSERT(pq.bytes.size() == fc::crypto::mldsa65::public_key_bytes,
+                      "invalid stored ML-DSA-65 public key length");
+            fc::crypto::mldsa65::public_key_data raw;
+            std::memcpy(raw.data, pq.bytes.data(), raw.size());
+            public_key_storage = fc::crypto::mldsa65::public_key_shim(raw);
          }
       }, pubkey);
       return std::move(public_key_storage);
@@ -48,6 +67,9 @@ struct shared_public_key {
          },
          [&](const shared_string& wa) {
             return wa == std::get<shared_string>(rhs.pubkey);
+         },
+         [&](const shared_mldsa65_public_key& pq) {
+            return pq == std::get<shared_mldsa65_public_key>(rhs.pubkey);
          }
       }, lhs.pubkey);
    }
@@ -68,6 +90,11 @@ struct shared_public_key {
             fc::crypto::webauthn::public_key pub;
             fc::raw::unpack(ds, pub);
             return pub == std::get<fc::crypto::webauthn::public_key>(r._storage);
+         },
+         [&](const shared_mldsa65_public_key& pq) {
+            const auto& public_key = std::get<fc::crypto::mldsa65::public_key_shim>(r._storage);
+            return pq.bytes.size() == public_key._data.size() &&
+                   std::memcmp(pq.bytes.data(), public_key._data.data, public_key._data.size()) == 0;
          }
       }, l.pubkey);
    }
@@ -129,6 +156,11 @@ struct shared_key_weight {
             assert(s.mutable_data() && s.size() == psz);
             fc::datastream<char*> ds(s.mutable_data(), psz);
             fc::raw::pack(ds, wa);
+         },
+         [&](const fc::crypto::mldsa65::public_key_shim& pq) {
+            key.pubkey.emplace<shared_mldsa65_public_key>(pq._data.size());
+            auto& stored = std::get<shared_mldsa65_public_key>(key.pubkey).bytes;
+            std::memcpy(stored.mutable_data(), pq._data.data, pq._data.size());
          }
       }, k.key._storage);
    }
@@ -364,4 +396,5 @@ FC_REFLECT(eosio::chain::wait_weight, (wait_sec)(weight) )
 FC_REFLECT(eosio::chain::authority, (threshold)(keys)(accounts)(waits) )
 FC_REFLECT(eosio::chain::shared_key_weight, (key)(weight) )
 FC_REFLECT(eosio::chain::shared_authority, (threshold)(keys)(accounts)(waits) )
+FC_REFLECT(eosio::chain::shared_mldsa65_public_key, (bytes))
 FC_REFLECT(eosio::chain::shared_public_key, (pubkey))

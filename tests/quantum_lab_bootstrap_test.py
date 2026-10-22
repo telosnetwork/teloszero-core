@@ -1,0 +1,99 @@
+"""Regression tests for the private Quantum Lab chain identity utility."""
+
+import datetime as dt
+import importlib.util
+import json
+import os
+from pathlib import Path
+import tempfile
+from types import SimpleNamespace
+import unittest
+from unittest import mock
+
+
+REPO = Path(os.environ.get("TELOSZERO_SOURCE", Path(__file__).resolve().parents[1]))
+SCRIPT = Path(os.environ.get("QUANTUM_LAB_SCRIPT", REPO / "scripts/quantum-lab/bootstrap.py"))
+spec = importlib.util.spec_from_file_location("quantum_lab_bootstrap", SCRIPT)
+lab = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(lab)
+
+
+class QuantumLabBootstrapTests(unittest.TestCase):
+    def genesis(self, name):
+        path = REPO / "genesis" / f"telos_{name}_genesis.json"
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def test_canonical_telos_chain_ids(self):
+        self.assertEqual(lab.genesis_chain_id(self.genesis("mainnet")), lab.MAINNET)
+        self.assertEqual(lab.genesis_chain_id(self.genesis("testnet")), lab.TESTNET)
+
+    def test_bad_public_key_checksum_is_rejected(self):
+        valid = self.genesis("testnet")["initial_key"]
+        bad = valid[:-1] + ("1" if valid[-1] != "1" else "2")
+        with self.assertRaises(SystemExit):
+            lab.decode_k1_public_key(bad)
+        with self.assertRaises(SystemExit):
+            lab.decode_k1_public_key("EOS1" + valid[3:])
+
+    def test_wrong_release_package_is_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="quantum-lab-package-") as temporary:
+            package = Path(temporary) / "wrong.deb"
+            package.write_bytes(b"not a TelosZero Core release")
+            with self.assertRaises(SystemExit):
+                lab.verify_package(package)
+
+    def test_new_identity_and_wrong_api_rejection(self):
+        with tempfile.TemporaryDirectory(prefix="quantum-lab-check-") as temporary:
+            root = Path(temporary) / "lab"
+            timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:00.000")
+            key = self.genesis("testnet")["initial_key"]
+            args = SimpleNamespace(directory=str(root), public_key=key,
+                                   timestamp=timestamp, package="verified.deb")
+            with mock.patch.object(lab, "verify_package", return_value=lab.PACKAGE_SHA256):
+                lab.prepare(args)
+            manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+            expected = manifest["expected_chain_id"]
+            self.assertNotIn(expected, (lab.MAINNET, lab.TESTNET))
+            self.assertIsNone(manifest["observed_chain_id"])
+            self.assertEqual(manifest["verified_package_sha256"], lab.PACKAGE_SHA256)
+            with self.assertRaises(SystemExit):
+                lab.prepare(args)
+            with mock.patch.object(lab, "checked_info", return_value={"chain_id": "a" * 64}):
+                with self.assertRaises(SystemExit):
+                    lab.pin(SimpleNamespace(directory=str(root)))
+            self.assertIsNone(json.loads((root / "manifest.json").read_text())["observed_chain_id"])
+            with mock.patch.object(lab, "checked_info", return_value={"chain_id": expected}):
+                lab.pin(SimpleNamespace(directory=str(root)))
+            samples = [
+                {"chain_id": expected, "head_block_num": 1, "last_irreversible_block_num": 1},
+                {"chain_id": expected, "head_block_num": 5, "last_irreversible_block_num": 3},
+            ]
+            with mock.patch.object(lab, "checked_info", side_effect=samples), \
+                 mock.patch.object(lab.time, "sleep"):
+                lab.check(SimpleNamespace(directory=str(root)))
+
+    def test_start_accepts_only_private_prepared_config(self):
+        with tempfile.TemporaryDirectory(prefix="quantum-lab-start-") as temporary:
+            root = Path(temporary) / "lab"
+            key = self.genesis("testnet")["initial_key"]
+            timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:00.000")
+            args = SimpleNamespace(directory=str(root), public_key=key,
+                                   timestamp=timestamp, package="verified.deb")
+            with mock.patch.object(lab, "verify_package", return_value=lab.PACKAGE_SHA256):
+                lab.prepare(args)
+            config = root / "config" / "config.ini"
+            config.write_text(config.read_text() + f"signature-provider = {key}=KEY:TEST_ONLY\n")
+            lab.validate_private_config(root)
+            with mock.patch.object(lab.shutil, "which", return_value="/usr/bin/nodeos"), \
+                 mock.patch.object(lab.os, "execv") as execute:
+                lab.start(SimpleNamespace(directory=str(root), nodeos="nodeos"))
+            command = execute.call_args.args[1]
+            self.assertIn("--genesis-json", command)
+            self.assertNotIn("TEST_ONLY", " ".join(command))
+            config.write_text(config.read_text() + "p2p-peer-address = mainnet.example:9876\n")
+            with self.assertRaises(SystemExit):
+                lab.validate_private_config(root)
+
+
+if __name__ == "__main__":
+    unittest.main()
