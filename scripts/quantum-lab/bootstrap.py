@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import subprocess
 import stat
 import struct
 import time
@@ -104,7 +105,15 @@ def decode_k1_public_key(value):
     if len(payload) != 37:
         fail("K1 public key must decode to exactly 37 bytes")
     key, checksum = payload[:33], payload[33:]
-    expected = hashlib.new("ripemd160", key + suffix).digest()[:4]
+    try:
+        digest = hashlib.new("ripemd160", key + suffix).digest()
+    except ValueError:
+        digest = subprocess.run(
+            ["openssl", "dgst", "-ripemd160", "-binary",
+             "-provider", "default", "-provider", "legacy"],
+            input=key + suffix, check=True, capture_output=True,
+        ).stdout
+    expected = digest[:4]
     if checksum != expected or key[0] not in (2, 3):
         fail("invalid K1 public-key checksum or point encoding")
     return key
