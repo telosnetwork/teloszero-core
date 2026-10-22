@@ -14,6 +14,16 @@ namespace fc { namespace crypto {
       size_t operator()(const webauthn::signature& sig) const {
          return sig.get_hash();
       }
+
+      size_t operator()(const mldsa65::signature_shim& sig) const {
+         // Container hash only; authority matching uses the verified public key.
+         size_t hash = 1469598103934665603ull;
+         for (unsigned char byte : sig._data.pubkey)
+            hash = (hash ^ byte) * 1099511628211ull;
+         for (unsigned char byte : sig._data.sig)
+            hash = (hash ^ byte) * 1099511628211ull;
+         return hash;
+      }
    };
 
    static signature::storage_type sig_parse_base58(const std::string& base58str)
@@ -49,6 +59,9 @@ namespace fc { namespace crypto {
          },
          [&](const webauthn::signature& wa) {
             return static_cast<size_t>(wa.variable_size());
+         },
+         [&](const mldsa65::signature_shim&) {
+            return mldsa65::signature_payload_bytes;
          }
       }, _storage);
    }

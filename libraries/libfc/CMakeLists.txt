@@ -52,6 +52,7 @@ set( fc_sources
      src/crypto/public_key.cpp
      src/crypto/private_key.cpp
      src/crypto/signature.cpp
+     src/crypto/mldsa65.cpp
      src/crypto/bls_private_key.cpp
      src/crypto/bls_public_key.cpp
      src/crypto/bls_signature.cpp

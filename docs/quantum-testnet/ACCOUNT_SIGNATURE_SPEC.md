@@ -1,6 +1,6 @@
 # Quantum Lab account-signature protocol sketch
 
-Status: design for a dedicated lab fork. No consensus implementation or chain activation is in this PR. This document pins the wire proposal and the source changes needed before deployment.
+Status: the fixed-width ML-DSA-65 account-signature slice is implemented and deployed on one dedicated experimental chain; see [DEPLOYED_LAB.md](DEPLOYED_LAB.md). This document also tracks the remaining protocol-feature, replay, resource, and cross-version qualification needed before any broader activation. The deployed lab fork uses an exact chain-ID gate rather than the general protocol-feature mechanism proposed below.
 
 ## Scope and fixed choices
 
