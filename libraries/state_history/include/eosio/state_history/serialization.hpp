@@ -146,7 +146,8 @@ void history_pack_big_bytes(datastream<ST>& ds, const eosio::chain::bytes& v) {
 template <typename ST>
 void history_pack_big_bytes(datastream<ST>& ds, const eosio::chain::shared_blob& b) {
    fc::raw::pack(ds, unsigned_int((uint32_t)b.size()));
-   ds.write(b.data(), b.size());
+   if (b.size())
+      ds.write(b.data(), b.size());
 }
 
 template <typename ST>

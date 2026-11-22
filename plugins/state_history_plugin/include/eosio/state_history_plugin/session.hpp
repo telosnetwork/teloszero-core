@@ -11,7 +11,9 @@
 #include <boost/asio/local/stream_protocol.hpp>
 #include <boost/asio/error.hpp>
 #include <boost/beast/websocket.hpp>
+#include <deque>
 #include <memory>
+#include <stdexcept>
 
 extern const char* const state_history_plugin_abi;
 
@@ -35,6 +37,7 @@ requires std::is_same_v<SocketType, boost::asio::ip::tcp::socket> || std::is_sam
 class session final : public session_base {
    using coro_throwing_stream = boost::asio::use_awaitable_t<>::as_default_on_t<boost::beast::websocket::stream<SocketType>>;
    using coro_nonthrowing_steadytimer = boost::asio::as_tuple_t<boost::asio::use_awaitable_t<>>::as_default_on_t<boost::asio::steady_timer>;
+   static constexpr std::size_t max_status_request_queue_depth = 1024;
 
 public:
    session(SocketType&& s, chain::controller& controller,
@@ -152,6 +155,8 @@ private:
                 */
                std::visit(chain::overloaded {
                   [&self]<typename GetStatusRequestV0orV1, typename = std::enable_if_t<std::is_base_of_v<get_status_request_v0, GetStatusRequestV0orV1>>>(const GetStatusRequestV0orV1&) {
+                     if (self.queued_status_requests.size() >= max_status_request_queue_depth)
+                        throw std::runtime_error("state history status request queue limit exceeded");
                      self.queued_status_requests.emplace_back(std::is_same_v<GetStatusRequestV0orV1, get_status_request_v1>);
                   },
                   [&self]<typename GetBlocksRequestV0orV1, typename = std::enable_if_t<std::is_base_of_v<get_blocks_request_v0, GetBlocksRequestV0orV1>>>(const GetBlocksRequestV0orV1& gbr) {
@@ -240,7 +245,7 @@ private:
                /**
                 * This lambda executes on the main thread; upon returning, the enclosing coroutine continues execution on the connection's strand
                 */
-               status_requests = std::move(self.queued_status_requests);
+               status_requests.swap(self.queued_status_requests);
 
                //decide what block -- if any -- to send out
                const chain::block_num_type latest_to_consider = self.current_blocks_request.irreversible_only ?
