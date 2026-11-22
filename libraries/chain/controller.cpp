@@ -3038,6 +3038,9 @@ struct controller_impl {
                                            bool explicit_billed_cpu_time,
                                            int64_t subjective_cpu_bill_us )
    {
+      // Retried transactions may see different permissions. Read-only execution never checks authorization.
+      if (!trx->is_read_only())
+         trx->authorization_verified = false;
       EOS_ASSERT(block_deadline != fc::time_point(), transaction_exception, "deadline cannot be uninitialized");
 
       transaction_trace_ptr trace;
@@ -3101,6 +3104,7 @@ struct controller_impl {
                        false,
                        trx->is_dry_run()
                );
+               trx->authorization_verified = true;
             }
             trx_context.exec();
             trx_context.finalize(); // Automatically rounds up network and CPU usage in trace and bills payers if successful
