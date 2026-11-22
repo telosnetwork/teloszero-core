@@ -22,10 +22,9 @@ packages install overlapping node and CLI binaries.
 
 ## Current Status
 
-TelosZero is in private release-candidate bootstrap. The goal of this branch is
-simple and important: establish a conservative, release-ready 1.2 line that
-Telos operators can trust before larger protocol work continues on later
-branches.
+TelosZero Core 1.4.0 is the planned follow-up to 1.2.2. It builds on the 1.2.2
+release with security and correctness backports and an Apple Silicon
+developer build.
 
 Do not use it for production until the TelosZero maintainers publish a signed
 release and an operator upgrade notice.
@@ -74,6 +73,7 @@ changes. `ce` is fetch-only for reviewing Community Edition patches.
 Stable branches:
 
 - `release/1.2-teloszero` for the first Telos-compatible production line
+- `release/1.4-teloszero` for the 1.4.0 release
 - future `release/2.x-teloszero` branches for later protocol work
 
 Historical upstream branches and tags are preserved for auditability.
@@ -90,8 +90,8 @@ The upstream copyright and license notice is preserved in `LICENSE`.
 
 ## Build From Source
 
-Use Ubuntu 22.04 or Ubuntu 20.04. macOS and other Unix-like systems are
-best-effort only.
+Use Ubuntu 22.04 or Ubuntu 20.04 for operator packages. On Apple Silicon,
+use the developer build below.
 
 Requirements:
 
@@ -144,6 +144,21 @@ sudo apt-get install -y g++-10
 cmake -DCMAKE_C_COMPILER=gcc-10 -DCMAKE_CXX_COMPILER=g++-10 \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_PREFIX_PATH=/usr/lib/llvm-11 ..
+```
+
+### Apple Silicon developer build
+
+Use a native arm64 terminal on macOS with the Xcode Command Line Tools and
+Homebrew. The build uses checked-in contract artifacts and the `eos-vm`
+interpreter. JIT, OC, and CDT contract builds are outside this developer path.
+
+```bash
+brew install cmake gmp python
+git submodule update --init --recursive
+cmake --preset macos-arm64 -DCMAKE_PREFIX_PATH="$(brew --prefix)"
+cmake --build --preset macos-arm64 --parallel "$(sysctl -n hw.logicalcpu)"
+ctest --preset macos-arm64
+./build/macos-arm64/programs/nodeos/nodeos --full-version
 ```
 
 ## Tests
