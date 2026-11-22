@@ -1,0 +1,34 @@
+name: Apple Silicon Build and Tests
+
+on:
+  push:
+    branches: [release/1.4-teloszero]
+  pull_request:
+    branches: [release/1.4-teloszero]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure
+        run: |
+          test "$(uname -m)" = arm64
+          brew install gmp
+          cmake --preset macos-arm64 -DCMAKE_PREFIX_PATH="$(brew --prefix)"
+      - name: Build
+        run: cmake --build --preset macos-arm64 --parallel "$(sysctl -n hw.logicalcpu)"
+      - name: Test
+        run: ctest --preset macos-arm64
+      - name: Verify native node binary
+        run: |
+          test "$(lipo -archs build/macos-arm64/programs/nodeos/nodeos)" = arm64
+          build/macos-arm64/programs/nodeos/nodeos --full-version

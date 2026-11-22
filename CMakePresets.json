@@ -1,0 +1,52 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "macos-arm64",
+      "displayName": "Apple Silicon developer build",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/macos-arm64",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
+        "ENABLE_OC": "OFF",
+        "EOSIO_COMPILE_TEST_CONTRACTS": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "macos-arm64",
+      "configurePreset": "macos-arm64",
+      "targets": ["nodeos", "cleos", "keosd", "spring-util", "test_fc", "unit_test"]
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "macos-arm64",
+      "configurePreset": "macos-arm64",
+      "filter": {
+        "include": {
+          "name": "^(test_fc|(bls_primitives|finality_misc|test_state_history|subjective_billing)_unit_test_eos-vm)$"
+        }
+      },
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    }
+  ]
+}
