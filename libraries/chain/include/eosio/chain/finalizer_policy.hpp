@@ -42,7 +42,7 @@ namespace eosio::chain {
 
       // max accumulated weak weight before becoming weak_final
       uint64_t max_weak_sum_before_weak_final() const {
-         uint64_t sum = std::accumulate( finalizers.begin(), finalizers.end(), 0,
+         uint64_t sum = std::accumulate( finalizers.begin(), finalizers.end(), uint64_t{0},
             [](uint64_t acc, const finalizer_authority& f) {
                return acc + f.weight;
             }

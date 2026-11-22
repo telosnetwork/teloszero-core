@@ -1,6 +1,7 @@
 #include <eosio/chain/qc.hpp>
 #include <eosio/chain/types.hpp>
 #include <eosio/chain/block_header.hpp>
+#include <eosio/chain/finalizer_policy.hpp>
 
 #include <fc/exception/exception.hpp>
 #include <fc/crypto/bls_private_key.hpp>
@@ -27,6 +28,17 @@ namespace std {
 }
 
 BOOST_AUTO_TEST_SUITE(finality_misc_tests)
+
+BOOST_AUTO_TEST_CASE(finalizer_policy_uses_full_weight_width) {
+   using namespace eosio::chain;
+
+   constexpr uint64_t large_weight = uint64_t{1} << 40;
+   const finalizer_policy policy{
+      .threshold = large_weight + 1,
+      .finalizers = {{.weight = large_weight}, {.weight = 3}, {.weight = 2}}
+   };
+   BOOST_CHECK_EQUAL(policy.max_weak_sum_before_weak_final(), 4u);
+}
 
 BOOST_AUTO_TEST_CASE(qc_state_transitions) try {
    using namespace eosio::chain;
@@ -59,6 +71,18 @@ BOOST_AUTO_TEST_CASE(qc_state_transitions) try {
    };
 
    constexpr uint64_t weight = 1;
+
+   {
+      // The remaining strong vote can still bring strong weight to quorum.
+      aggregating_qc_sig_t qc(4, 5, 2);
+      strong_vote(qc, digest, 0, 4);
+      weak_vote(qc, digest, 1, weight);
+      BOOST_REQUIRE_EQUAL(qc.state(), state_t::weak_achieved);
+      weak_vote(qc, digest, 2, weight);
+      BOOST_CHECK_EQUAL(qc.state(), state_t::weak_achieved);
+      strong_vote(qc, digest, 3, weight);
+      BOOST_CHECK_EQUAL(qc.state(), state_t::strong);
+   }
 
    {
       constexpr uint64_t quorum = 1;
