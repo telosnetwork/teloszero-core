@@ -156,7 +156,11 @@ namespace fc {
      *  its initial state (one buffer with read and write pointers at the
      *  start).
      */
-    void advance_read_ptr(uint32_t bytes) {
+    void advance_read_ptr(size_t bytes) {
+      if (bytes > bytes_to_read()) {
+        FC_THROW_EXCEPTION(out_of_range_exception, "tried to advance ${r} bytes but only ${s} left",
+                           ("r", bytes)("s", bytes_to_read()));
+      }
       advance_index(read_ind, bytes);
       if (read_ind == write_ind) {
         reset();

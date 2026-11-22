@@ -1,5 +1,7 @@
 #include <fc/network/message_buffer.hpp>
 
+#include <cstring>
+#include <string_view>
 #include <thread>
 
 #include <boost/test/unit_test.hpp>
@@ -19,6 +21,38 @@ BOOST_AUTO_TEST_SUITE(message_buffer_tests)
 
 constexpr size_t     def_buffer_size_mb = 4;
 constexpr size_t     def_buffer_size = 1024*1024*def_buffer_size_mb;
+
+BOOST_AUTO_TEST_CASE(bounded_stream_preserves_following_bytes)
+{
+  fc::message_buffer<4> mb;
+  std::memcpy(mb.write_ptr(), "abcd", 4);
+  mb.advance_write_ptr(4);
+  std::memcpy(mb.write_ptr(), "ef", 2);
+  mb.advance_write_ptr(2);
+
+  auto peek = mb.create_peek_datastream();
+  fc::bounded_datastream peek_frame(peek, 5);
+  char data[4];
+  BOOST_REQUIRE(peek_frame.read(data, sizeof(data)));
+  BOOST_CHECK_EQUAL(std::string_view(data, sizeof(data)), "abcd");
+  BOOST_CHECK_EQUAL(mb.bytes_to_read(), 6u);
+
+  auto stream = mb.create_datastream();
+  fc::bounded_datastream frame(stream, 5);
+  fc::datastream_mirror mirror(frame);
+  BOOST_REQUIRE(mirror.read(data, sizeof(data)));
+  const auto captured = mirror.extract_mirror();
+  BOOST_CHECK_EQUAL(std::string_view(captured.data(), captured.size()), "abcd");
+  BOOST_CHECK_EQUAL(frame.remaining(), 1u);
+  frame.skip(frame.remaining());
+
+  char next = '\0';
+  BOOST_CHECK_THROW(frame.get(next), fc::out_of_range_exception);
+  BOOST_CHECK_THROW(mb.advance_read_ptr(2), fc::out_of_range_exception);
+  BOOST_CHECK_EQUAL(mb.bytes_to_read(), 1u);
+  BOOST_REQUIRE(stream.get(next));
+  BOOST_CHECK_EQUAL(next, 'f');
+}
 
 /// Test default construction and buffer sequence generation
 BOOST_AUTO_TEST_CASE(message_buffer_construction)

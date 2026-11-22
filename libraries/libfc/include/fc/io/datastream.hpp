@@ -176,6 +176,42 @@ class datastream<Container, typename std::enable_if_t<(std::is_same_v<std::vecto
    const Container& storage() const { return _container; }
 };
 
+/// Limits reads and skips to a fixed window of the underlying stream.
+template <typename DataStream>
+class bounded_datastream {
+public:
+   bounded_datastream(DataStream& stream, size_t size) : stream(stream), bytes_remaining(size) {}
+
+   void skip(size_t size) {
+      check_size("skip", size);
+      if (size != 0)
+         stream.skip(size);
+      bytes_remaining -= size;
+   }
+
+   bool read(char* data, size_t size) {
+      check_size("read", size);
+      if (!stream.read(data, size))
+         return false;
+      bytes_remaining -= size;
+      return true;
+   }
+
+   bool get(char& c) { return read(&c, 1); }
+   bool get(unsigned char& c) { return read(reinterpret_cast<char*>(&c), 1); }
+   size_t remaining() const { return bytes_remaining; }
+
+private:
+   void check_size(const char* operation, size_t size) const {
+      if (size > bytes_remaining)
+         FC_THROW_EXCEPTION(out_of_range_exception, "frame ${op} of ${size} bytes exceeds ${remaining} remaining bytes",
+                            ("op", operation)("size", size)("remaining", bytes_remaining));
+   }
+
+   DataStream& stream;
+   size_t bytes_remaining;
+};
+
 /**
  * Datastream wrapper that creates a copy of the datastream data read. After reading
  * the data is available via extract_mirror()
