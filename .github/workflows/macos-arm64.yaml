@@ -19,9 +19,23 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Install CMake 4.3.2
+        shell: bash
+        run: |
+          # The runner's CMake 4.5 rejects vendored Boost.Locale's source groups.
+          archive="$RUNNER_TEMP/cmake-4.3.2-macos-universal.tar.gz"
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "$archive" \
+            https://github.com/Kitware/CMake/releases/download/v4.3.2/cmake-4.3.2-macos-universal.tar.gz
+          printf '%s  %s\n' 808ab43a0db04c8eec9ed7db12b90d7be1c8e2e75f4a060724d604a2043ccaf7 "$archive" | shasum -a 256 --check
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+          cmake_bin="$RUNNER_TEMP/cmake-4.3.2-macos-universal/CMake.app/Contents/bin"
+          test -x "$cmake_bin/cmake"
+          printf '%s\n' "$cmake_bin" >> "$GITHUB_PATH"
       - name: Configure
         run: |
           test "$(uname -m)" = arm64
+          test "$(cmake --version | head -n 1)" = 'cmake version 4.3.2'
           brew install gmp
           cmake --preset macos-arm64 -DCMAKE_PREFIX_PATH="$(brew --prefix)"
       - name: Build
