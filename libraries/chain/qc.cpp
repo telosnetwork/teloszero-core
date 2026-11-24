@@ -71,11 +71,11 @@ void qc_t::verify_basic(const finalizer_policies_t& policies) const {
       EOS_ASSERT(policies.pending_finalizer_policy, invalid_qc,
                  "qc ${bn} contains pending policy signature for nonexistent pending finalizer policy", ("bn", block_num));
 
-      // verify that every finalizer included in both policies voted the same
-      verify_dual_finalizers_votes(policies, active_policy_sig, *pending_policy_sig, block_num);
-
       pending_policy_sig->verify_vote_format(policies.pending_finalizer_policy);
       pending_policy_sig->verify_weights(policies.pending_finalizer_policy);
+
+      // Both vote bitsets must be validated before comparing votes across policies.
+      verify_dual_finalizers_votes(policies, active_policy_sig, *pending_policy_sig, block_num);
    } else {
       EOS_ASSERT(!policies.pending_finalizer_policy, invalid_qc,
                  "qc ${bn} does not contain pending policy signature for pending finalizer policy", ("bn", block_num));
@@ -84,8 +84,14 @@ void qc_t::verify_basic(const finalizer_policies_t& policies) const {
 
 // returns true iff the other and I voted in the same way.
 bool qc_sig_t::vote_same_at(const qc_sig_t& other, uint32_t my_vote_index, uint32_t other_vote_index) const {
-   assert(!strong_votes || my_vote_index < strong_votes->size());
-   assert(!weak_votes || my_vote_index < weak_votes->size());
+   EOS_ASSERT(!strong_votes || my_vote_index < strong_votes->size(), invalid_qc,
+              "active strong vote index is out of range");
+   EOS_ASSERT(!weak_votes || my_vote_index < weak_votes->size(), invalid_qc,
+              "active weak vote index is out of range");
+   EOS_ASSERT(!other.strong_votes || other_vote_index < other.strong_votes->size(), invalid_qc,
+              "pending strong vote index is out of range");
+   EOS_ASSERT(!other.weak_votes || other_vote_index < other.weak_votes->size(), invalid_qc,
+              "pending weak vote index is out of range");
 
    // We have already verified the same index has not voted both strong
    // and weak for a given qc_sig_t (I or other).

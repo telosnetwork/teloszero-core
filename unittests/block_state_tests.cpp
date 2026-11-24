@@ -953,6 +953,18 @@ BOOST_AUTO_TEST_CASE(verify_qc_dual_finalizers) try {
          BOOST_CHECK_NO_THROW( bsp->verify_qc(qc) );
       } else {
          BOOST_CHECK_EXCEPTION( bsp->verify_qc(qc), invalid_qc, eosio::testing::fc_exception_message_contains("does not vote the same on active and pending policies") );
+
+         // Validate the pending vote format before comparing votes across policies.
+         // An extra bit keeps all policy indices in range while testing this order.
+         for (auto* votes : {&qc.pending_policy_sig->strong_votes, &qc.pending_policy_sig->weak_votes}) {
+            if (*votes) {
+               (*votes)->resize(num_finalizers + 1);
+               BOOST_CHECK_EXCEPTION( bsp->verify_qc_basic(qc), invalid_qc,
+                                      eosio::testing::fc_exception_message_starts_with(
+                                         "vote bitset size is not the same as the number of finalizers") );
+               (*votes)->resize(num_finalizers);
+            }
+         }
       }
    };
 
