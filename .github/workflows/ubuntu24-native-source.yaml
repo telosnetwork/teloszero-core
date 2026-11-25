@@ -1,0 +1,45 @@
+name: Ubuntu 24.04 native source build
+
+on:
+  push:
+    branches: [feature/ubuntu24-native-build]
+  pull_request:
+    branches: [release/1.4.1-teloszero]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 cmake git libcurl4-openssl-dev \
+            libgmp-dev llvm-14-dev ninja-build python3-numpy zlib1g-dev
+      - name: Configure with OC enabled
+        run: |
+          cmake -S . -B build/ubuntu24 -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCMAKE_PREFIX_PATH=/usr/lib/llvm-14 \
+            -DENABLE_OC=ON -DEOSIO_COMPILE_TEST_CONTRACTS=OFF
+          grep -q 'LLVM_DIR:PATH=/usr/lib/llvm-14/' build/ubuntu24/CMakeCache.txt
+      - name: Build node and tests
+        run: cmake --build build/ubuntu24 --target nodeos unit_test test_fc --parallel 2
+      - name: Test OC runtime and core libraries
+        run: |
+          ctest --test-dir build/ubuntu24 -N -R '_unit_test_eos-vm-oc$' | grep -q 'bls_primitives_unit_test_eos-vm-oc'
+          ctest --test-dir build/ubuntu24 -R '^(test_fc|(bls_primitives|finality_misc|test_state_history|subjective_billing)_unit_test_eos-vm-oc)$' \
+            --output-on-failure --timeout 480
+      - name: Verify native node binary
+        run: |
+          file build/ubuntu24/programs/nodeos/nodeos
+          build/ubuntu24/programs/nodeos/nodeos --full-version
