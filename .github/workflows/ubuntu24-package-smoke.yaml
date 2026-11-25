@@ -1,0 +1,87 @@
+name: Ubuntu 24.04 package qualification
+
+on:
+  push:
+    branches:
+      - ci/ubuntu24-core-1.4.1
+      - release/1.4.1-teloszero
+    paths:
+      - .github/workflows/ubuntu24-package-smoke.yaml
+      - README.md
+  pull_request:
+    branches:
+      - release/1.4.1-teloszero
+    paths:
+      - .github/workflows/ubuntu24-package-smoke.yaml
+      - README.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-smoke:
+    name: Install and start published 1.4.1 on Ubuntu 24.04 amd64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: teloszero-v1.4.1
+          persist-credentials: false
+      - name: Download and verify published package
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --retry-all-errors \
+            --output teloszero-core_1.4.1_amd64.deb \
+            https://github.com/telosnetwork/teloszero-core/releases/download/teloszero-v1.4.1/teloszero-core_1.4.1_amd64.deb
+          echo "d9c8b841690270ab65e3b7aa267417c19af0d629c88a60323bd79e798166ecdc  teloszero-core_1.4.1_amd64.deb" | sha256sum --check -
+      - name: Install package and check linked libraries
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ./teloszero-core_1.4.1_amd64.deb
+          dpkg-query -W -f='\${Status} \${Version}\n' teloszero-core
+          nodeos --version
+          ldd "$(command -v nodeos)" | tee nodeos-ldd.txt
+          if grep -q 'not found' nodeos-ldd.txt; then
+            exit 1
+          fi
+      - name: Start a local Telos testnet chain and query it
+        run: |
+          set -euo pipefail
+          nodeos \
+            --data-dir "$RUNNER_TEMP/teloszero-data" \
+            --config-dir "$RUNNER_TEMP/teloszero-config" \
+            --genesis-json "$GITHUB_WORKSPACE/genesis/telos_testnet_genesis.json" \
+            --plugin eosio::chain_api_plugin \
+            --http-server-address 127.0.0.1:8888 \
+            --p2p-listen-endpoint 127.0.0.1:9876 \
+            > nodeos.log 2>&1 &
+          pid=$!
+          trap 'status=$?; if [ "$status" -ne 0 ]; then cat nodeos.log; fi; kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:8888/v1/chain/get_info \
+              --output info.json 2>/dev/null; then
+              break
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              cat nodeos.log
+              exit 1
+            fi
+            sleep 1
+          done
+          test -s info.json
+          kill -0 "$pid"
+          python3 - <<'PY'
+          import json
+          with open("info.json", encoding="utf-8") as f:
+              info = json.load(f)
+          with open("genesis/telos_testnet_chain_id.json", encoding="utf-8") as f:
+              expected = json.load(f)["chain_id"]
+          assert info["chain_id"] == expected, (info["chain_id"], expected)
+          assert isinstance(info["head_block_num"], int)
+          print("chain_id:", info["chain_id"])
+          print("head_block_num:", info["head_block_num"])
+          PY
