@@ -32,12 +32,12 @@ jobs:
             -DCMAKE_PREFIX_PATH=/usr/lib/llvm-14 \
             -DENABLE_OC=ON -DEOSIO_COMPILE_TEST_CONTRACTS=OFF
           grep -q 'LLVM_DIR:PATH=/usr/lib/llvm-14/' build/ubuntu24/CMakeCache.txt
-      - name: Build node and tests
-        run: cmake --build build/ubuntu24 --target nodeos unit_test test_fc --parallel 2
+      - name: Build node, tools, and tests
+        run: cmake --build build/ubuntu24 --target nodeos cleos keosd spring-util unit_test test_fc --parallel 2
       - name: Test OC runtime and core libraries
         run: |
           ctest --test-dir build/ubuntu24 -N -R '_unit_test_eos-vm-oc$' | grep -q 'bls_primitives_unit_test_eos-vm-oc'
-          ctest --test-dir build/ubuntu24 -R '^(test_fc|(bls_primitives|finality_misc|test_state_history|subjective_billing)_unit_test_eos-vm-oc)$' \
+          ctest --test-dir build/ubuntu24 -R '^(test_fc|(bls_primitives|finality_misc|test_state_history|subjective_billing|wasm_part[123]|wasm_config_part[1-5])_unit_test_eos-vm-oc)$' \
             --output-on-failure --timeout 480
       - name: Verify native node binary
         run: |

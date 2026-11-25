@@ -113,10 +113,7 @@ namespace LLVMJIT
 		else { return false; }
 	}
 
-	// Heap-allocated so ThreadSafeContext can take ownership via unique_ptr
-	// in the ORCv2 compile path (LLVMJIT.cpp).  Each forked compile child
-	// uses this exactly once and then _exit()s.
-	llvm::LLVMContext& context = *new llvm::LLVMContext;
+	llvm::LLVMContext context;
 	llvm::Type* llvmResultTypes[(Uptr)ResultType::num];
 
 	llvm::Type* llvmI8Type;

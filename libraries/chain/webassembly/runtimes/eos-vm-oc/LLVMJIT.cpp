@@ -19,6 +19,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/RTDyldMemoryManager.h"
+#include "llvm/ExecutionEngine/RuntimeDyld.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
 #include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
@@ -27,11 +28,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #if LLVM_VERSION_MAJOR < 12
 #include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
 #include "llvm/ExecutionEngine/Orc/NullResolver.h"
-#endif
-
-#if LLVM_VERSION_MAJOR >= 12
-#include "llvm/ExecutionEngine/Orc/ThreadSafeModule.h"
-#include "llvm/ExecutionEngine/Orc/ExecutorProcessControl.h"
 #endif
 
 #include "llvm/Analysis/Passes.h"
@@ -214,105 +210,17 @@ namespace LLVMJIT
 	};
 
 #if LLVM_VERSION_MAJOR >= 12
-	// ORCv2 JIT compilation unit (LLVM 12+)
+	// Compile and link synchronously with RuntimeDyld. The removed ORCv1 API is
+	// retained below for LLVM 7-11; a bare ORCv2 JITDylib does not resolve
+	// external process symbols such as memcpy and memset for generated code.
 	struct JITModule
 	{
-		JITModule() {
-			objectLayer = std::make_unique<llvm::orc::RTDyldObjectLinkingLayer>(ES,[this]() {
-									return std::unique_ptr<llvm::RuntimeDyld::MemoryManager>(
-										std::make_unique<MemoryManagerForwarder>(*this));
-							  });
-			objectLayer->setProcessAllSections(true);
-			objectLayer->setNotifyLoaded(
-				[this](llvm::orc::MaterializationResponsibility &R, const llvm::object::ObjectFile &Obj,
-				       const llvm::RuntimeDyld::LoadedObjectInfo &o) {
-					for(auto symbolSizePair : llvm::object::computeSymbolSizes(Obj)) {
-						auto symbol = symbolSizePair.first;
-						auto name = symbol.getName();
-						auto address = symbol.getAddress();
-						if(symbol.getType() && symbol.getType().get() == llvm::object::SymbolRef::ST_Function && name && address) {
-							Uptr loadedAddress = Uptr(*address);
-							auto symbolSection = symbol.getSection();
-							if(symbolSection)
-								loadedAddress += (Uptr)o.getSectionLoadAddress(*symbolSection.get());
-							Uptr functionDefIndex;
-							if(getFunctionIndexFromExternalName(name->data(),functionDefIndex)) {
-								uintptr_t base = (uintptr_t)unitmemorymanager->codeBase();
-								function_to_offsets[functionDefIndex] = loadedAddress - base;
-							}
-#if PRINT_DISASSEMBLY
-							disassembleFunction((U8*)loadedAddress, symbolSizePair.second);
-#endif
-						} else if(symbol.getType() && symbol.getType().get() == llvm::object::SymbolRef::ST_Data && name && *name == getTableSymbolName()) {
-							Uptr loadedAddress = Uptr(*address);
-							auto symbolSection = symbol.getSection();
-							if(symbolSection)
-								loadedAddress += (Uptr)o.getSectionLoadAddress(*symbolSection.get());
-							uintptr_t base = (uintptr_t)unitmemorymanager->codeBase();
-							table_offset = loadedAddress - base;
-						}
-					}
-				});
-			compileLayer = std::make_unique<llvm::orc::IRCompileLayer>(ES, *objectLayer,
-				std::make_unique<llvm::orc::SimpleCompiler>(*targetMachine));
-		}
-
 		void compile(llvm::Module* llvmModule);
 
 		std::shared_ptr<UnitMemoryManager> unitmemorymanager = std::make_shared<UnitMemoryManager>();
-
 		std::map<unsigned, uintptr_t> function_to_offsets;
 		std::vector<uint8_t> final_pic_code;
 		uintptr_t table_offset = 0;
-
-		~JITModule()
-		{
-		}
-	private:
-		// Thin forwarder that delegates to the shared UnitMemoryManager.
-		// ORCv2 RTDyldObjectLinkingLayer wants a factory that returns unique_ptr,
-		// but we need all allocations to land in the same UnitMemoryManager so we
-		// can collect the emitted code afterward.
-		struct MemoryManagerForwarder : llvm::RTDyldMemoryManager {
-			JITModule& owner;
-			MemoryManagerForwarder(JITModule& o) : owner(o) {}
-			void registerEHFrames(U8* addr, U64 loadAddr, uintptr_t numBytes) override {
-				owner.unitmemorymanager->registerEHFrames(addr, loadAddr, numBytes);
-			}
-			void deregisterEHFrames() override {
-				owner.unitmemorymanager->deregisterEHFrames();
-			}
-			bool needsToReserveAllocationSpace() override {
-				return owner.unitmemorymanager->needsToReserveAllocationSpace();
-			}
-			void reserveAllocationSpace(uintptr_t numCodeBytes, U32 codeAlignment,
-			                            uintptr_t numReadOnlyBytes, U32 readOnlyAlignment,
-			                            uintptr_t numReadWriteBytes, U32 readWriteAlignment) override {
-				owner.unitmemorymanager->reserveAllocationSpace(numCodeBytes, codeAlignment,
-				                                                numReadOnlyBytes, readOnlyAlignment,
-				                                                numReadWriteBytes, readWriteAlignment);
-			}
-			U8* allocateCodeSection(uintptr_t numBytes, U32 alignment, U32 sectionID, llvm::StringRef sectionName) override {
-				return owner.unitmemorymanager->allocateCodeSection(numBytes, alignment, sectionID, sectionName);
-			}
-			U8* allocateDataSection(uintptr_t numBytes, U32 alignment, U32 sectionID, llvm::StringRef SectionName, bool isReadOnly) override {
-				return owner.unitmemorymanager->allocateDataSection(numBytes, alignment, sectionID, SectionName, isReadOnly);
-			}
-			bool finalizeMemory(std::string* ErrMsg = nullptr) override {
-				return owner.unitmemorymanager->finalizeMemory(ErrMsg);
-			}
-		};
-
-		static std::unique_ptr<llvm::orc::ExecutionSession> createES() {
-			auto EPC = llvm::orc::SelfExecutorProcessControl::Create();
-			WAVM_ASSERT_THROW(EPC);
-			return std::make_unique<llvm::orc::ExecutionSession>(std::move(*EPC));
-		}
-		std::unique_ptr<llvm::orc::ExecutionSession> ES_ptr = createES();
-		llvm::orc::ExecutionSession& ES = *ES_ptr;
-		llvm::orc::JITDylib &mainJD = ES.createBareJITDylib("main");
-		std::unique_ptr<llvm::orc::RTDyldObjectLinkingLayer> objectLayer;
-		std::unique_ptr<llvm::orc::IRCompileLayer> compileLayer;
 	};
 #else
 	// ORCv1 JIT compilation unit (LLVM 7-11)
@@ -429,17 +337,40 @@ namespace LLVMJIT
 		if(DUMP_OPTIMIZED_MODULE) { printModule(llvmModule,"llvmOptimizedDump"); }
 
 #if LLVM_VERSION_MAJOR >= 12
-		// The LLVMContext is heap-allocated (see LLVMEmitIR.cpp) so
-		// ThreadSafeContext can take ownership via unique_ptr.
-		llvm::orc::ThreadSafeContext TSCtx(std::unique_ptr<llvm::LLVMContext>(&llvmModule->getContext()));
 		std::unique_ptr<llvm::Module> mod(llvmModule);
-		llvm::orc::ThreadSafeModule TSM(std::move(mod), std::move(TSCtx));
-		auto err = compileLayer->add(mainJD, std::move(TSM));
-		WAVM_ASSERT_THROW(!err);
+		llvm::orc::SimpleCompiler compiler(*targetMachine);
+		auto objBuffer = llvm::cantFail(compiler(*mod));
+		auto objFile = llvm::cantFail(llvm::object::ObjectFile::createObjectFile(objBuffer->getMemBufferRef()));
 
-		// Force materialization by looking up a real symbol
-		auto sym = ES.lookup({&mainJD}, ES.intern("wasmFunc0"));
-		WAVM_ASSERT_THROW(!!sym);
+		llvm::RuntimeDyld dyld(*unitmemorymanager, *unitmemorymanager);
+		dyld.setProcessAllSections(true);
+		auto loadedObjInfo = dyld.loadObject(*objFile);
+		dyld.resolveRelocations();
+		unitmemorymanager->finalizeMemory();
+
+		for(auto symbolSizePair : llvm::object::computeSymbolSizes(*objFile)) {
+			auto symbol = symbolSizePair.first;
+			auto name = symbol.getName();
+			auto address = symbol.getAddress();
+			if(symbol.getType() && symbol.getType().get() == llvm::object::SymbolRef::ST_Function && name && address) {
+				Uptr loadedAddress = Uptr(*address);
+				auto symbolSection = symbol.getSection();
+				if(symbolSection)
+					loadedAddress += (Uptr)loadedObjInfo->getSectionLoadAddress(*symbolSection.get());
+				Uptr functionDefIndex;
+				if(getFunctionIndexFromExternalName(name->data(), functionDefIndex))
+					function_to_offsets[functionDefIndex] = loadedAddress - (uintptr_t)unitmemorymanager->codeBase();
+#if PRINT_DISASSEMBLY
+				disassembleFunction((U8*)loadedAddress, symbolSizePair.second);
+#endif
+			} else if(symbol.getType() && symbol.getType().get() == llvm::object::SymbolRef::ST_Data && name && *name == getTableSymbolName()) {
+				Uptr loadedAddress = Uptr(*address);
+				auto symbolSection = symbol.getSection();
+				if(symbolSection)
+					loadedAddress += (Uptr)loadedObjInfo->getSectionLoadAddress(*symbolSection.get());
+				table_offset = loadedAddress - (uintptr_t)unitmemorymanager->codeBase();
+			}
+		}
 #else
 		llvm::orc::VModuleKey K = ES.allocateVModule();
 		std::unique_ptr<llvm::Module> mod(llvmModule);
