@@ -639,6 +639,9 @@ REGISTER_CF_HOST_FUNCTION( blake2_f );
 REGISTER_CF_HOST_FUNCTION( sha3 );
 REGISTER_CF_HOST_FUNCTION( k1_recover );
 
+// ed25519_verify protocol feature
+REGISTER_CF_HOST_FUNCTION( ed25519_verify );
+
 // bls_primitives protocol feature
 REGISTER_CF_HOST_FUNCTION( bls_g1_add );
 REGISTER_CF_HOST_FUNCTION( bls_g2_add );
