@@ -90,8 +90,16 @@ The upstream copyright and license notice is preserved in `LICENSE`.
 
 ## Build From Source
 
-Use Ubuntu 22.04 or Ubuntu 20.04 for operator packages. On Apple Silicon,
-use the developer build below.
+The published 1.4.1 Linux amd64 operator package passed a clean Ubuntu 24.04
+install, linked-library check, and local Telos testnet node startup with a
+matching chain ID ([hosted qualification run](https://github.com/telosnetwork/teloszero-core/actions/runs/45715939252)).
+Ubuntu 22.04 remains supported. Ubuntu 20.04 is a legacy option whose standard
+security support ended in May 2025; use Ubuntu Pro/ESM if it remains deployed.
+
+Native Linux source builds with the OC runtime still require LLVM 7 through 11.
+Use Ubuntu 22.04 for the documented source build below. Ubuntu 24.04 source
+builds with its distro LLVM are not yet qualified. On Apple Silicon, use the
+developer build below.
 
 Requirements:
 
@@ -137,7 +145,7 @@ cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/usr/lib/llvm-11 ..
 make -j "$(nproc)" package
 ```
 
-For Ubuntu 20.04, install `g++-10` and pass the compiler explicitly:
+For legacy Ubuntu 20.04 with Ubuntu Pro/ESM, install `g++-10` and pass the compiler explicitly:
 
 ```bash
 sudo apt-get install -y g++-10
