@@ -40,6 +40,8 @@ enum class builtin_protocol_feature_t : uint32_t {
    disable_deferred_trxs_stage_2 = 23,
    savanna = 24,
    reserved_private_fork_protocol_features = 500000,
+   // TelosZero protocol features, in the range Spring reserves for forks so that upstream values never collide
+   ed25519_verify = 500000,
 };
 
 struct protocol_feature_subjective_restrictions {

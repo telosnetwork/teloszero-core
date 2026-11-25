@@ -34,3 +34,6 @@
 [submodule "libraries/libfc/libraries/boringssl/bssl"]
 	path = libraries/libfc/libraries/boringssl/bssl
 	url = https://boringssl.googlesource.com/boringssl
+[submodule "libraries/libfc/libsodium/libsodium"]
+	path = libraries/libfc/libsodium/libsodium
+	url = https://github.com/jedisct1/libsodium.git

@@ -116,6 +116,9 @@ const static uint32_t   overhead_per_account_ram_bytes     = 2*1024; ///< overhe
 const static uint32_t   setcode_ram_bytes_multiplier       = 10;     ///< multiplier on contract size to account for multiple copies and cached compilation
 
 const static uint32_t   hashing_checktime_block_size       = 10*1024;  /// call checktime from hashing intrinsic once per this number of bytes
+/// longest message ed25519_verify takes: libsodium hashes the message in one call that checktime cannot interrupt;
+/// 64 KiB is about 0.1 ms of SHA-512
+const static uint32_t   ed25519_verify_max_message_size    = 64*1024;
 
 #ifdef EOSIO_EOS_VM_JIT_RUNTIME_ENABLED
 const static eosio::chain::wasm_interface::vm_type default_wasm_runtime = eosio::chain::wasm_interface::vm_type::eos_vm_jit;

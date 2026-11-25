@@ -363,6 +363,21 @@ host function call will trigger a transition to the Savanna consensus algorithm.
               builtin_protocol_feature_t::disable_deferred_trxs_stage_2
             }
          } )
+         (  builtin_protocol_feature_t::ed25519_verify, builtin_protocol_feature_spec{
+            "ED25519_VERIFY",
+            fc::variant("3b46c2b12af35f93c96062965998baa78c46bda7862cc7f4862177dab08203a7").as<digest_type>(),
+            // SHA256 hash of the raw message below within the comment delimiters (exclude newline after /*) (do not modify message below).
+/*
+Builtin protocol feature: ED25519_VERIFY
+
+Adds a new cryptographic host function
+- ed25519_verify: verifies an Ed25519 signature (RFC 8032, pure Ed25519) of a message
+  of at most 64 KiB by a 32-byte public key. Verification is strict: s must be canonical
+  (s < L), the public key a canonical encoding, neither R nor the public key of small
+  order, and the equation is checked without the cofactor.
+*/
+            {}
+         } )
    ;
 
 

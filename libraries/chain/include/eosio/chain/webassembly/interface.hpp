@@ -1812,6 +1812,32 @@ namespace webassembly {
          int32_t k1_recover( span<const char> signature, span<const char> digest, span<char> pub) const;
 
          /**
+          * Verifies an Ed25519 signature (RFC 8032, pure Ed25519), as made by Solana wallets and many other systems.
+          * Available once the ED25519_VERIFY protocol feature is activated.
+          *
+          * Strict verification (libsodium's crypto_sign_ed25519_verify_detached, vendored and pinned): s must be
+          * canonical (s < L), the public key a canonical encoding, neither R nor the public key of small order, and
+          * the equation is checked without the cofactor.
+          *
+          * Import it in a contract as
+          *    __attribute__((eosio_wasm_import))
+          *    int32_t ed25519_verify(const char* msg, uint32_t msg_len, const char* sig, uint32_t sig_len,
+          *                           const char* pub, uint32_t pub_len);
+          *
+          * CPU: metered by time like every host function, checktime runs after the call. Messages are capped at
+          * config::ed25519_verify_max_message_size (64 KiB) so that one call cannot run long past the deadline.
+          *
+          * @ingroup crypto
+          * @param msg - the signed message, at most 64 KiB
+          * @param sig - the 64-byte signature R || s
+          * @param pub - the 32-byte public key
+          *
+          * @return 0 if the signature is valid; -1 if it is not, or if sig is not 64 bytes, pub not 32 bytes or msg
+          *         longer than 64 KiB.
+         */
+         int32_t ed25519_verify( span<const char> msg, span<const char> sig, span<const char> pub ) const;
+
+         /**
           * Host function for G1 addition on the elliptic curve bls12-381
           *
           * @ingroup crypto
