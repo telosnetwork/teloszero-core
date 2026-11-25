@@ -41,7 +41,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y ./teloszero-core_1.4.1_amd64.deb
-          dpkg-query -W -f='\${Status} \${Version}\n' teloszero-core
+          dpkg-query -W teloszero-core
           nodeos --version
           ldd "$(command -v nodeos)" | tee nodeos-ldd.txt
           if grep -q 'not found' nodeos-ldd.txt; then
