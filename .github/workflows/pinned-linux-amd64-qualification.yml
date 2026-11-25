@@ -1,0 +1,192 @@
+name: TelosZero pinned Linux amd64 qualification
+
+on:
+  push:
+    branches:
+      - codex/qualify-pinned-1.4.1
+    paths:
+      - .github/workflows/pinned-linux-amd64-qualification.yml
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_SHA: d101d65fd5b1a1e67767392df73e82ee4e9c4133
+  DOCKERFILE_BLOB: 55289ed287551752c1ea8cde16383f384e568f62
+  PINNED_APT_BLOB: ba62ba30140b6bd496a052f72668b234c5f1df98
+  UPSTREAM_BUILDER: ghcr.io/antelopeio/builders@sha256:79012c0e287903818c09faef6391335080ed80cef8ab4567b922f5269800adf7
+
+jobs:
+  build:
+    name: Build and smoke test (${{ matrix.route }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        route: [upstream-cache]
+    env:
+      BUILD_ROUTE: ${{ matrix.route }}
+    steps:
+      - name: Make room for the pinned build
+        shell: bash
+        run: |
+          test "$(uname -m)" = x86_64
+          df -h /
+          # These hosted-runner tool bundles are unrelated to this Linux container build.
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/share/swift
+          docker image prune --all --force
+          df -h /
+          QUALIFICATION_DIR="$RUNNER_TEMP/pinned-qualification"
+          printf 'QUALIFICATION_DIR=%s\n' "$QUALIFICATION_DIR" >> "$GITHUB_ENV"
+          mkdir -p "$QUALIFICATION_DIR/logs" "$QUALIFICATION_DIR/packages"
+
+      - name: Check out the exact release source and recursive submodules
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: d101d65fd5b1a1e67767392df73e82ee4e9c4133
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Verify source and record build inputs
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test "$(git hash-object tools/reproducible.Dockerfile)" = "$DOCKERFILE_BLOB"
+          test "$(git hash-object tools/pinned.pl)" = "$PINNED_APT_BLOB"
+          test -z "$(git status --porcelain --ignore-submodules=none)"
+          git submodule status --recursive | tee "$QUALIFICATION_DIR/logs/submodules.txt"
+          if grep -Eq '^[-+U]' "$QUALIFICATION_DIR/logs/submodules.txt"; then
+            echo '::error::The recursive checkout has missing or mismatched submodules.'
+            exit 1
+          fi
+          {
+            printf 'release_commit=%s\n' "$RELEASE_SHA"
+            printf 'workflow_commit=%s\n' "$GITHUB_SHA"
+            printf 'workflow_run=%s/%s/actions/runs/%s\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+            printf 'build_route=%s\n' "$BUILD_ROUTE"
+            printf 'canonical_dockerfile_git_blob=%s\n' "$DOCKERFILE_BLOB"
+            printf 'canonical_pinned_apt_git_blob=%s\n' "$PINNED_APT_BLOB"
+            cat /etc/os-release
+            uname -m
+            nproc
+            free -h
+            df -h /
+            docker version
+          } | tee "$QUALIFICATION_DIR/logs/build-inputs.txt"
+
+      - name: Set up the native BuildKit builder
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - name: Build the selected packages
+        shell: bash
+        run: |
+          docker buildx inspect --bootstrap | tee "$QUALIFICATION_DIR/logs/buildx.txt"
+          dockerfile=tools/reproducible.Dockerfile
+          if [ "$BUILD_ROUTE" = upstream-cache ]; then
+            dockerfile="$QUALIFICATION_DIR/logs/upstream-cache.Dockerfile"
+            printf 'FROM %s AS builder\n\n' "$UPSTREAM_BUILDER" > "$dockerfile"
+            sed -n '/^FROM builder AS build/,$p' tools/reproducible.Dockerfile |
+              sed '/^FROM scratch AS exporter/i RUN ctest --test-dir build --output-on-failure --no-tests=error --timeout 180 -R "^(block_state|finality|finality_misc|finalizer_vote|savanna_cluster|savanna_finalizer_policy)_unit_test_eos-vm$"' >> "$dockerfile"
+            grep -Fxq 'FROM scratch AS exporter' "$dockerfile"
+          fi
+          docker buildx build \
+            --platform linux/amd64 \
+            --build-arg SPRING_BUILD_JOBS=2 \
+            --file "$dockerfile" \
+            --metadata-file "$QUALIFICATION_DIR/logs/buildkit-metadata.json" \
+            --output "type=local,dest=$QUALIFICATION_DIR/packages" \
+            --progress plain . 2>&1 | tee "$QUALIFICATION_DIR/logs/build.log"
+          grep -F -- '-- The CXX compiler identification is Clang 18.1.8' "$QUALIFICATION_DIR/logs/build.log"
+
+      - name: Verify package and start an isolated nodeos
+        shell: bash
+        run: |
+          package="$QUALIFICATION_DIR/packages/teloszero-core_1.4.1_amd64.deb"
+          test "$(dpkg-deb -f "$package" Package)" = teloszero-core
+          test "$(dpkg-deb -f "$package" Version)" = 1.4.1
+          test "$(dpkg-deb -f "$package" Architecture)" = amd64
+          dpkg-deb -f "$package" | tee "$QUALIFICATION_DIR/logs/deb-control.txt"
+          smoke_dir=$(mktemp -d "$RUNNER_TEMP/pinned-smoke.XXXXXXXX")
+          dpkg-deb -x "$package" "$smoke_dir/root"
+          nodeos="$smoke_dir/root/usr/bin/nodeos"
+          file "$nodeos" | tee "$QUALIFICATION_DIR/logs/nodeos-elf.txt"
+          grep -F 'x86-64' "$QUALIFICATION_DIR/logs/nodeos-elf.txt"
+          ldd "$nodeos" | tee "$QUALIFICATION_DIR/logs/nodeos-ldd.txt"
+          full_version=$("$nodeos" --full-version)
+          test "$full_version" = "v1.4.1-$RELEASE_SHA"
+          printf '%s\n' "$full_version" | tee "$QUALIFICATION_DIR/logs/nodeos-version.txt"
+          sha256sum "$nodeos" | cut -d ' ' -f 1 | tee "$QUALIFICATION_DIR/logs/nodeos-sha256.txt"
+          build_info="$QUALIFICATION_DIR/logs/chainbase-build-info.json"
+          "$smoke_dir/root/usr/bin/spring-util" chain-state build-info --print | tee "$build_info"
+          jq -e '.compiler == "Clang 18.1.8" and .boost_version == 108300 and .debug == false and .os == "OS_LINUX" and .arch == "ARCH_X86_64"' "$build_info"
+          cd "$QUALIFICATION_DIR/packages"
+          shopt -s nullglob
+          packages=(*.deb *.tar.zst)
+          sha256sum "${packages[@]}" | tee SHA256SUMS
+          sha256sum -c SHA256SUMS
+
+          "$nodeos" \
+            --data-dir "$smoke_dir/data" \
+            --config-dir "$smoke_dir/config" \
+            --chain-state-db-size-mb 256 \
+            --chain-state-db-guard-size-mb 16 \
+            --plugin eosio::chain_api_plugin \
+            --http-server-address 127.0.0.1:19888 \
+            --p2p-listen-endpoint 127.0.0.1:19887 \
+            > "$QUALIFICATION_DIR/logs/nodeos-smoke.log" 2>&1 &
+          nodeos_pid=$!
+          trap 'kill -TERM "$nodeos_pid" 2>/dev/null || true; wait "$nodeos_pid" || true' EXIT
+          info="$QUALIFICATION_DIR/logs/nodeos-get-info.json"
+          for ((attempt = 1; attempt <= 45; ++attempt)); do
+            if curl --noproxy '*' -fsS --max-time 2 --json '{}' \
+              http://127.0.0.1:19888/v1/chain/get_info > "$info" 2>/dev/null; then
+              break
+            fi
+            kill -0 "$nodeos_pid"
+            sleep 1
+          done
+          jq -e --arg version "$full_version" \
+            '.server_full_version_string == $version and (.chain_id | test("^[[:xdigit:]]{64}$"))' "$info"
+          cat "$info"
+
+      - name: Upload candidate packages and checksums
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: teloszero-core-1.4.1-linux-amd64-d101d65f-${{ matrix.route }}
+          path: ${{ env.QUALIFICATION_DIR }}/packages/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Verify a mixed-version finalizer policy transition
+        shell: bash
+        run: |
+          mixed_dir=$(mktemp -d "$RUNNER_TEMP/pinned-mixed.XXXXXXXX")
+          baseline="$mixed_dir/teloszero-core_1.4.0_amd64.deb"
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/telosnetwork/teloszero-core/releases/download/teloszero-v1.4.0/teloszero-core_1.4.0_amd64.deb \
+            --output "$baseline"
+          printf '%s  %s\n' ece6bb7c6854738f6d639fad5960c87e7321b76144a13682dd47f40086ecd6c3 "$baseline" | sha256sum --check
+          dpkg-deb -x "$baseline" "$mixed_dir/baseline"
+          dpkg-deb -x "$QUALIFICATION_DIR/packages/teloszero-core_1.4.1_amd64.deb" "$mixed_dir/candidate"
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_SHA/.github/qualification/mixed_version_finality.py" \
+            --output "$mixed_dir/mixed_version_finality.py"
+          printf '%s  %s\n' e1c8db07f5cb25f6dafe19b37c75575b06212bcbeadb33f709c69abb366ff536 "$mixed_dir/mixed_version_finality.py" | sha256sum --check
+          python3 "$mixed_dir/mixed_version_finality.py" \
+            --source "$GITHUB_WORKSPACE" \
+            --baseline-nodeos "$mixed_dir/baseline/usr/bin/nodeos" \
+            --candidate-bin "$mixed_dir/candidate/usr/bin" \
+            --candidate-version "v1.4.1-$RELEASE_SHA" \
+            --evidence "$QUALIFICATION_DIR/logs/mixed-version-finality.json" \
+            --scratch-dir "$RUNNER_TEMP"
+
+      - name: Upload build and smoke-test evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: teloszero-core-1.4.1-linux-amd64-d101d65f-${{ matrix.route }}-evidence
+          path: ${{ env.QUALIFICATION_DIR }}/logs/
+          if-no-files-found: ignore
+          retention-days: 14
