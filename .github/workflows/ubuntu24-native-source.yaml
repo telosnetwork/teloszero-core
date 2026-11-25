@@ -36,6 +36,7 @@ jobs:
         run: |
           cmake --build build/ubuntu24 --target package --parallel 2
           test -n "$(find build/ubuntu24 -maxdepth 1 -name 'teloszero-core_*.deb' -print -quit)"
+          sha256sum build/ubuntu24/teloszero-core_*.deb
       - name: Test OC runtime and core libraries
         run: |
           ctest --test-dir build/ubuntu24 -N -R '_unit_test_eos-vm-oc$' | grep -q 'bls_primitives_unit_test_eos-vm-oc'
@@ -82,3 +83,10 @@ jobs:
           print('chain_id:', info['chain_id'])
           print('head_block_num:', info['head_block_num'])
           PY
+      - name: Save qualified test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ubuntu24-native-oc-deb-${{ github.sha }}
+          path: build/ubuntu24/teloszero-core_*.deb
+          if-no-files-found: error
+          retention-days: 7
