@@ -96,16 +96,15 @@ matching chain ID ([hosted qualification run](https://github.com/telosnetwork/te
 Ubuntu 22.04 remains supported. Ubuntu 20.04 is a legacy option whose standard
 security support ended in May 2025; use Ubuntu Pro/ESM if it remains deployed.
 
-Native Linux source builds with the OC runtime still require LLVM 7 through 11.
-Use Ubuntu 22.04 for the documented source build below. Ubuntu 24.04 source
-builds with its distro LLVM are not yet qualified. On Apple Silicon, use the
-developer build below.
+Native Linux source builds with the OC runtime support LLVM 7 through 11 and
+LLVM 14. Ubuntu 24.04 uses its distro LLVM 14 package with Clang 18. On Apple
+Silicon, use the developer build below.
 
 Requirements:
 
 - C++20 compiler and standard library
 - CMake 3.16+
-- LLVM 7 through 11 for Linux OC builds
+- LLVM 7 through 11 or LLVM 14 for Linux OC builds
 - libcurl 7.40.0+
 - git
 - GMP
@@ -143,6 +142,21 @@ mkdir -p build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/usr/lib/llvm-11 ..
 make -j "$(nproc)" package
+```
+
+For Ubuntu 24.04 native amd64 source builds with OC enabled:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  clang-18 cmake git libcurl4-openssl-dev libgmp-dev \
+  llvm-14-dev ninja-build python3-numpy zlib1g-dev
+cmake -S . -B build/ubuntu24 -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 \
+  -DCMAKE_PREFIX_PATH=/usr/lib/llvm-14 \
+  -DENABLE_OC=ON -DEOSIO_COMPILE_TEST_CONTRACTS=OFF
+cmake --build build/ubuntu24 --parallel "$(nproc)"
 ```
 
 For legacy Ubuntu 20.04 with Ubuntu Pro/ESM, install `g++-10` and pass the compiler explicitly:

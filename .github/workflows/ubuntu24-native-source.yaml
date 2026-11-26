@@ -1,0 +1,92 @@
+name: Ubuntu 24.04 native source build
+
+on:
+  pull_request:
+    branches: [release/1.4.1-teloszero]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 cmake git libcurl4-openssl-dev \
+            libgmp-dev llvm-14-dev ninja-build python3-numpy zlib1g-dev
+      - name: Configure with OC enabled
+        run: |
+          cmake -S . -B build/ubuntu24 -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCMAKE_PREFIX_PATH=/usr/lib/llvm-14 \
+            -DENABLE_OC=ON -DEOSIO_COMPILE_TEST_CONTRACTS=OFF
+          grep -q 'LLVM_DIR:PATH=/usr/lib/llvm-14/' build/ubuntu24/CMakeCache.txt
+      - name: Build node, tools, and tests
+        run: cmake --build build/ubuntu24 --target nodeos cleos keosd spring-util unit_test test_fc --parallel 2
+      - name: Build Debian package
+        run: |
+          cmake --build build/ubuntu24 --target package --parallel 2
+          test -n "$(find build/ubuntu24 -maxdepth 1 -name 'teloszero-core_*.deb' -print -quit)"
+          sha256sum build/ubuntu24/teloszero-core_*.deb
+      - name: Test OC runtime and core libraries
+        run: |
+          ctest --test-dir build/ubuntu24 -N -R '_unit_test_eos-vm-oc$' | grep -q 'bls_primitives_unit_test_eos-vm-oc'
+          ctest --test-dir build/ubuntu24 -R '^test_fc$|_unit_test_eos-vm-oc$' \
+            --parallel 2 --output-on-failure --timeout 480
+      - name: Verify native node binary
+        run: |
+          file build/ubuntu24/programs/nodeos/nodeos
+          build/ubuntu24/programs/nodeos/nodeos --full-version
+      - name: Start a local Telos testnet chain
+        run: |
+          set -euo pipefail
+          build/ubuntu24/programs/nodeos/nodeos \
+            --data-dir "$RUNNER_TEMP/teloszero-data" \
+            --config-dir "$RUNNER_TEMP/teloszero-config" \
+            --genesis-json "$GITHUB_WORKSPACE/genesis/telos_testnet_genesis.json" \
+            --plugin eosio::chain_api_plugin \
+            --http-server-address 127.0.0.1:8888 \
+            --p2p-listen-endpoint 127.0.0.1:9876 \
+            > nodeos.log 2>&1 &
+          pid=$!
+          trap 'status=$?; if [ "$status" -ne 0 ]; then cat nodeos.log; fi; kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:8888/v1/chain/get_info \
+              --output info.json 2>/dev/null; then
+              break
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              cat nodeos.log
+              exit 1
+            fi
+            sleep 1
+          done
+          test -s info.json
+          python3 - <<'PY'
+          import json
+          with open('info.json', encoding='utf-8') as f:
+              info = json.load(f)
+          with open('genesis/telos_testnet_chain_id.json', encoding='utf-8') as f:
+              expected = json.load(f)['chain_id']
+          assert info['chain_id'] == expected, (info['chain_id'], expected)
+          assert isinstance(info['head_block_num'], int)
+          print('chain_id:', info['chain_id'])
+          print('head_block_num:', info['head_block_num'])
+          PY
+      - name: Save qualified test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ubuntu24-native-oc-deb-${{ github.sha }}
+          path: build/ubuntu24/teloszero-core_*.deb
+          if-no-files-found: error
+          retention-days: 7
