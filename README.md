@@ -22,32 +22,13 @@ packages install overlapping node and CLI binaries.
 
 ## Current Status
 
-TelosZero Core 1.4.0 is the planned follow-up to 1.2.2. It builds on the 1.2.2
-release with security and correctness backports and an Apple Silicon
-developer build.
-
-Do not use it for production until the TelosZero maintainers publish a signed
-release and an operator upgrade notice.
-
-What is already in place:
-
-- a clean Spring `v1.2.2` base for the first TelosZero production line
-- Telos-controlled package identity: `teloszero-core` and `teloszero-core-dev`
-- curated backports for release safety, build integrity, and operator hygiene
-- documented licensing and patch provenance
-- preserved upstream history for auditability
-- a path to Telos-owned CI, release signing, package publishing, and support
-
-What comes next:
-
-- cut signed release artifacts from this stable branch
-- publish clear operator upgrade guidance
-- finish Linux package validation and reproducible build checks
-- continue reviewing useful Spring and Spring Community Edition patches
-- reserve future `release/2.x-teloszero` work for larger protocol evolution
-
-TelosZero exists to make Telos infrastructure boring in the best possible way:
-owned, reviewable, reproducible, and maintained.
+The latest published release is
+[`teloszero-v1.4.1`](https://github.com/telosnetwork/teloszero-core/releases/tag/teloszero-v1.4.1).
+The `release/1.4.1-teloszero` branch also contains changes merged after that
+tag, including native Ubuntu 24.04 source-build support with LLVM 14 and the
+OC runtime. Building the branch therefore produces a different binary from
+the published 1.4.1 package. Operators should use the tagged package approved
+for their network unless a source build has been separately qualified.
 
 ## Repository Remotes
 
@@ -74,6 +55,7 @@ Stable branches:
 
 - `release/1.2-teloszero` for the first Telos-compatible production line
 - `release/1.4-teloszero` for the 1.4.0 release
+- `release/1.4.1-teloszero` for 1.4.1 maintenance and later source-build fixes
 - future `release/2.x-teloszero` branches for later protocol work
 
 Historical upstream branches and tags are preserved for auditability.
@@ -112,11 +94,15 @@ Requirements:
 - python3-numpy
 - zlib
 
-Clone with submodules:
+Clone the 1.4.1 maintenance branch with submodules. The default `main` branch
+and the published `teloszero-v1.4.1` tag do not contain the Ubuntu 24.04
+LLVM 14 source-build change:
 
 ```bash
-git clone --recursive https://github.com/TelosNetwork/teloszero-core.git
+git clone --recursive --branch release/1.4.1-teloszero \
+  https://github.com/TelosNetwork/teloszero-core.git
 cd teloszero-core
+git rev-parse HEAD
 ```
 
 Install build dependencies on Ubuntu 22.04:
@@ -156,8 +142,14 @@ cmake -S . -B build/ubuntu24 -G Ninja \
   -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 \
   -DCMAKE_PREFIX_PATH=/usr/lib/llvm-14 \
   -DENABLE_OC=ON -DEOSIO_COMPILE_TEST_CONTRACTS=OFF
-cmake --build build/ubuntu24 --parallel "$(nproc)"
+cmake --build build/ubuntu24 \
+  --target nodeos cleos keosd spring-util --parallel 2
+build/ubuntu24/programs/nodeos/nodeos --full-version
 ```
+
+The hosted [Ubuntu 24.04 native source-build job](https://github.com/telosnetwork/teloszero-core/actions/runs/45722873551)
+uses these dependencies and configure flags. Build a Debian package separately
+with `cmake --build build/ubuntu24 --target package --parallel 2` if needed.
 
 For legacy Ubuntu 20.04 with Ubuntu Pro/ESM, install `g++-10` and pass the compiler explicitly:
 
